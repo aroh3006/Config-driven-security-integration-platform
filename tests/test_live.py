@@ -425,7 +425,14 @@ def test_bad_record_scenario_shows_the_broken_record(client):
     assert "[ Quarantine · " in page
     assert "REPLAY · after a fix" in page
     assert 'class="tray"' in page
-    assert "EMAIL · empty" in page and "EMAIL · ok" not in page
+
+
+def test_empty_field_on_a_broken_record_is_not_called_ok():
+    config = {"map": {"id": "id", "email": "profile.login", "status": "status"}}
+    item = {"raw_json": '{"status": "ACTIVE"}', "reason": "missing required field 'id' (path id)"}
+    tags = [row["tag"] for row in scenarios._record_rows(config, item)]
+    assert "ID · set aside" in tags and "EMAIL · empty" in tags and "STATUS · ok" in tags
+    assert "EMAIL · ok" not in tags
 
 
 def test_pressing_healthy_clears_a_failure(client):
