@@ -237,7 +237,7 @@ def build_router(
             view=view,
             scenarios=scenarios.SCENARIOS,
             refresh=state["active"] or (row["running"] and row["recent"]),
-            p=patch.build(shown, limit=4, focus=name, tag=view["status"]["tag"], show_slot=False),
+            p=patch.build(shown, limit=4, focus=name, tag=view["status"]["tag"], show_slot=False, healthy_first=True),
             engine={
                 "eyebrow": "Engine",
                 "title": view["status"]["engine"][0],

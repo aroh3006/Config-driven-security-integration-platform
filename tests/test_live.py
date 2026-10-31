@@ -10,13 +10,14 @@ import pytest
 from fastapi.testclient import TestClient
 
 import engine
-from app import connectors, engine_client, live, pages, runlog, scenarios
+from app import connectors, engine_client, live, pages, patch, runlog, scenarios
 from app.api import create_app
 from engine import faults
 from engine import http as engine_http
 from engine import runner as engine_runner
+from mock_server import __main__ as mock_main
 from mock_server import app as mock_app
-from mock_server import saas
+from mock_server import data, saas
 from store import db
 
 REPO_CONFIGS = Path(__file__).resolve().parent.parent / "configs"
@@ -297,6 +298,63 @@ def test_rejected_login_behind_a_200_is_explained(client, monkeypatch):
     assert "Failed: login rejected" in page
     assert "credentials rejected" in page
     assert "wrong-value-123" not in page
+
+
+def test_missing_secret_does_not_claim_a_401(client, monkeypatch):
+    monkeypatch.delenv("MOCK_JIRA_EMAIL")
+    page = press(client, "mock-jira-tickets", "wrong_key").text
+    assert "Failed: secret missing" in page
+    assert "no request sent" in page and "401" not in page
+    assert "Failed: login rejected" not in page and "a wrong key" not in page.lower()
+    assert "LOGIN · stopped before any data" in page
+
+
+def test_panel_shows_the_fault_then_healthy_sources(client):
+    rows = [
+        {"name": "watched", "status": "auth_failed", "mock": True},
+        {"name": "other-fault", "status": "failing", "mock": False},
+        {"name": "fine", "status": "healthy", "mock": True},
+        {"name": "fine-too", "status": "healthy", "mock": False},
+    ]
+    assert [row["name"] for row in patch.choose(rows, 3, "watched", healthy_first=True)] == ["watched", "fine-too", "fine"]
+    assert [row["name"] for row in patch.choose(rows, 3)][0] == "other-fault"
+
+
+def test_clean_mock_data_is_healthy_until_a_fault_is_pressed(config_folder, monkeypatch):
+    monkeypatch.setattr(data, "MESSY", False)
+    server = TestClient(mock_app.create_app(), base_url="http://localhost:9000")
+
+    def handle(request):
+        headers = {k: v for k, v in request.headers.items() if k.lower() != "host"}
+        reply = server.request(request.method, str(request.url.raw_path, "ascii"), headers=headers, content=request.content)
+        kept = [(k, v) for k, v in reply.headers.multi_items() if k.lower() != "content-encoding"]
+        return httpx.Response(reply.status_code, headers=kept, content=reply.content)
+
+    monkeypatch.setenv("MOCK_OKTA_KEY", saas.OKTA_KEY)
+    monkeypatch.setattr(engine.memstore, "_default_store", db)
+    text = (REPO_CONFIGS / "mock-okta-users.yaml").read_text(encoding="utf-8")
+    assert connectors.save_and_approve(text, "test") == []
+    options = {"store": db, "transport": httpx.MockTransport(handle), "sleeper": lambda _: None, "resolver": lambda _: ["127.0.0.1"]}
+
+    clean = engine.run_connector("mock-okta-users", **options)
+    assert (clean.status, clean.records_bad) == ("success", 0)
+    assert db.get_connector("mock-okta-users")["status"] == "healthy"
+
+    faults.set_fault("mock-okta-users", "badrecord")
+    assert engine.run_connector("mock-okta-users", **options).records_bad == 1
+    faults._faults.clear()
+
+
+def test_running_server_is_clean_unless_asked(monkeypatch, tmp_path):
+    monkeypatch.setattr(data, "MESSY", True)
+    monkeypatch.setattr(mock_main.uvicorn, "run", lambda *_, **__: None)
+    monkeypatch.setattr(mock_main.Path, "write_text", lambda *_, **__: 0)
+    monkeypatch.setattr(mock_main.sys, "argv", ["mock_server"])
+    mock_main.main()
+    assert data.MESSY is False
+    monkeypatch.setattr(mock_main.sys, "argv", ["mock_server", "--messy"])
+    mock_main.main()
+    assert data.MESSY is True
 
 
 def test_bad_record_scenario_shows_the_broken_record(client):

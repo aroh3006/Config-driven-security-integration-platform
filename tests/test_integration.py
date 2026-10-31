@@ -174,11 +174,12 @@ def test_common_schema_values_are_clean(run):
     assert any(row["cve"] for row in rows)
 
 
-def test_device_file_source_quarantines_the_row_with_no_id(run, monkeypatch):
+def test_device_file_source_loads_every_row(run, monkeypatch):
     monkeypatch.chdir(REPO_CONFIGS.parent)
     result = run("devices-file")
-    assert (result.status, result.records_pulled, result.records_bad) == ("partial", 12, 1)
-    assert db.count_records("device", "devices-file") == 11
+    assert (result.status, result.records_pulled, result.records_bad) == ("success", 12, 0)
+    assert db.count_records("device", "devices-file") == 12
+    assert db.get_connector("devices-file")["status"] == "healthy"
 
 
 def test_rerun_does_not_duplicate(run):

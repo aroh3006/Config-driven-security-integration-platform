@@ -27,9 +27,17 @@ def _order(row: dict[str, Any]) -> tuple[int, int, str]:
     return (RANK[tone(row["status"])], 1 if row["mock"] else 0, row["name"])
 
 
-def choose(rows: list[dict[str, Any]], limit: int, focus: str | None = None) -> list[dict[str, Any]]:
-    """Worst status first, real before mock. The focused connector always shows, on top."""
+def choose(
+    rows: list[dict[str, Any]], limit: int, focus: str | None = None, healthy_first: bool = False
+) -> list[dict[str, Any]]:
+    """Worst status first, real before mock. The focused connector always shows, on top.
+
+    With healthy_first, healthy rows come before the rest. The live page uses this so
+    the fault being watched stands out. The other faults still count in "+N more".
+    """
     ordered = sorted(rows, key=_order)
+    if healthy_first:
+        ordered.sort(key=lambda row: tone(row["status"]) != "teal")
     if focus:
         ordered = [r for r in ordered if r["name"] == focus] + [r for r in ordered if r["name"] != focus]
     return ordered[:limit]
@@ -41,9 +49,10 @@ def build(
     focus: str | None = None,
     tag: dict[str, str] | None = None,
     show_slot: bool = True,
+    healthy_first: bool = False,
 ) -> dict[str, Any]:
     """Return everything the patch panel template draws."""
-    chosen = choose(rows, limit, focus)
+    chosen = choose(rows, limit, focus, healthy_first)
     more = len(rows) - len(chosen)
     count = len(chosen) + (1 if more else 0) + (1 if show_slot else 0)
     height = max(count, 3) * STEP - ROW_GAP
