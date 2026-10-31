@@ -139,6 +139,7 @@ class HttpClient:
             self._log(method, str(resp.request.url) if resp.request else url, None, resp.status_code, started, attempt,
                       "injected" if fault else "")
             self._note_rate_headers(resp)
+            self._check_auth_failure(resp, url)
             status = resp.status_code
             if 200 <= status < 300:
                 return resp
@@ -188,6 +189,13 @@ class HttpClient:
         raise RetryExhausted("token endpoint kept failing")  # pragma: no cover
 
     # ------------------------------------------------------------------ internals
+    def _check_auth_failure(self, resp: httpx.Response, url: str) -> None:
+        """Raise when the config's header says the login was rejected, whatever the status."""
+        rule = self.cfg.auth_failure
+        value = resp.headers.get(rule.header, "") if rule else ""
+        if rule and rule.contains.lower() in value.lower():
+            raise AuthFailed(f"HTTP {resp.status_code} from {self._host(url)}: credentials rejected ({rule.header}: {mask(value)})")
+
     def _send(self, method, url, params, json_body, headers) -> httpx.Response:
         max_bytes = int(self.cfg.limits.max_response_mb * 1024 * 1024)
         if params:  # httpx would replace the URL's own query string. Merge explicitly.

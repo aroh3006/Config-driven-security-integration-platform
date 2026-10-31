@@ -183,6 +183,30 @@ def test_circuit_opens_after_repeated_failures(store, sleeps):
     assert r.connector_status == "circuit_open"
 
 
+def with_auth_failure(rule: str) -> str:
+    return FW.replace("request: {path: /logs", f"auth_failure: {rule}\nrequest: {{path: /logs")
+
+
+def test_rejected_login_behind_a_200_is_auth_failed(runner, sleeps):
+    def h(req):
+        return httpx.Response(200, json={"data": {"logs": []}, "total": 0}, headers={"X-Login-Reason": "AUTHENTICATED_FAILED"})
+
+    r = runner(with_auth_failure("{header: X-Login-Reason, contains: AUTHENTICATED_FAILED}"), h)
+    assert r.status == "auth_failed" and r.pages == 0 and sleeps == []
+    assert "credentials rejected (X-Login-Reason: AUTHENTICATED_FAILED)" in r.last_error
+
+
+def test_rejected_login_behind_a_404_is_auth_failed_and_case_blind(runner, sleeps):
+    r = runner(with_auth_failure("{header: message, contains: invalid apikey}"),
+               lambda req: httpx.Response(404, headers={"message": "Invalid apiKey."}))
+    assert r.status == "auth_failed" and sleeps == []
+
+
+def test_auth_failure_rule_leaves_normal_responses_alone(runner):
+    r = runner(with_auth_failure("{header: X-Login-Reason, contains: AUTHENTICATED_FAILED}"), fw_handler)
+    assert r.status == "success" and r.records_pulled == 5
+
+
 def test_hook_called_with_failure_count(runner):
     from engine import on_run_finished
 

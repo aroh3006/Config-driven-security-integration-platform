@@ -216,6 +216,17 @@ class Notify(Strict):
     slack_after_failures: int = 3
 
 
+class AuthFailure(Strict):
+    """How an API reports a rejected login when it does not answer 401 or 403.
+
+    Some APIs answer 200 with an empty list or 404 and only say why in a header.
+    Without this block a wrong key looks like a healthy run with no data.
+    """
+
+    header: str
+    contains: str
+
+
 # ---------------------------------------------------------------- mapping (FR-5)
 class FieldSpec(Strict):
     path: Optional[str] = None
@@ -266,6 +277,7 @@ class Config(Strict):
     tenant_id: str = "default"
     source: Source
     auth: Auth = Field(default_factory=NoAuth)
+    auth_failure: Optional[AuthFailure] = None
     request: Request = Field(default_factory=Request)
     pagination: Pagination = Field(default_factory=NoPaging)
     schedule: str = "every 15m"
@@ -354,6 +366,7 @@ _SECTION_MODELS: dict[str, type[BaseModel]] = {
     "incremental": Incremental,
     "limits": Limits,
     "notify": Notify,
+    "auth_failure": AuthFailure,
 }
 _AUTH_MODELS = {get_args(m.model_fields["type"].annotation)[0]: m
                 for m in (NoAuth, ApiKeyAuth, BasicAuth, BearerAuth, OAuth2ClientCredentials)}
