@@ -4,7 +4,7 @@
     <h2>Sources</h2>
     <a class="icon-btn" href="/ui/add" aria-label="Add a source" title="Add a source">{{ icon("plus") }}</a>
   </div>
-  <form class="side-search" method="get" role="search" action="{{ request.url.path }}">
+  <form class="side-search" method="get" role="search" action="{{ request.url.path }}{% if request.url.path == "/" %}#workspace{% endif %}">
     <label class="sr-only" for="side-find">Search sources</label>
     <input id="side-find" type="search" name="find" value="{{ side.find }}" placeholder="Search sources">
   </form>

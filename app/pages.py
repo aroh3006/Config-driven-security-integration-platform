@@ -162,20 +162,22 @@ def build_router(
 
     @router.get("/", response_class=HTMLResponse)
     def health_page(request: Request) -> HTMLResponse:
-        """The landing page. It stands alone, with no sidebar."""
-        return templates.TemplateResponse(
+        """The landing screen, with the workspace below it. Scrolling down reaches it."""
+        rows = health.health_rows()
+        return _render(
             request,
             "home.html",
-            {
-                "stubbed": engine.stubbed_functions(),
-                "msg": request.query_params.get("msg"),
-                "configured": len(db.list_connectors()),
-                "sources": LANDING_SOURCES,
-                "cables_in": LANDING_CABLES_IN,
-                "cables_out": LANDING_CABLES_OUT,
-                "outputs": LANDING_OUTPUTS,
-                "chips": HOME_ENGINE["chips"],
-            },
+            nav="health",
+            rows=rows,
+            p=patch.build(rows),
+            engine=HOME_ENGINE,
+            healthy=sum(1 for row in rows if row["status"] == "healthy"),
+            configured=len(rows),
+            sources=LANDING_SOURCES,
+            cables_in=LANDING_CABLES_IN,
+            cables_out=LANDING_CABLES_OUT,
+            outputs=LANDING_OUTPUTS,
+            chips=HOME_ENGINE["chips"],
         )
 
     @router.get("/ui/health", response_class=HTMLResponse)

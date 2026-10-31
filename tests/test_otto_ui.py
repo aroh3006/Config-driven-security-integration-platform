@@ -232,38 +232,59 @@ def test_home_with_no_connectors_still_renders(client):
 
 # Landing page
 
-def test_landing_page_stands_alone_with_no_sidebar(client):
+def landing_part(page):
+    return page[page.index('class="landing"') : page.index('id="workspace"')]
+
+
+def test_landing_comes_first_then_the_workspace_below(client):
     page = client.get("/").text
-    assert 'class="rail"' not in page and 'class="side"' not in page
+    assert page.index('class="landing"') < page.index('id="workspace"') < page.index('class="rail"')
+    assert 'class="side"' in page and "[ Connection health ]" in page
     assert "<title>Otto</title>" in page
-    assert ">OTTO<" in page and "CONNECT" not in page
-    assert ">Otto<" in page
-    assert "Any tool." in page and "One config." in page
     assert "<script" not in page
 
 
-def test_landing_page_has_the_five_sources_and_links_onward(client):
-    page = client.get("/").text
+def test_landing_has_otto_branding_and_no_workspace_button(client):
+    landing = landing_part(client.get("/").text)
+    assert ">OTTO<" in landing and "CONNECT" not in landing
+    assert ">Otto<" in landing
+    assert "Any tool." in landing and "One config." in landing
+    assert "Open workspace" not in client.get("/").text
+    assert "Scroll for the workspace" in landing
+
+
+def test_landing_has_the_five_sources_and_links_onward(client):
+    landing = landing_part(client.get("/").text)
     for name in ("Okta", "GitHub", "Jira", "NVD", "CISA KEV"):
-        assert f"<b>{name}</b>" in page
-    assert page.count('href="/ui/add"') == 2
-    assert 'href="/ui/health"' in page
-    assert 'href="/ui/records/alerts"' in page
+        assert f"<b>{name}</b>" in landing
+    assert 'href="/ui/add"' in landing
+    assert 'href="/ui/records/alerts"' in landing
 
 
-def test_landing_page_counts_real_connectors_and_does_not_refresh(client):
+def test_landing_counts_real_connectors(client):
     assert "0 configured" in client.get("/").text
     add(client, "demo")
-    page = client.get("/").text
-    assert "1 configured" in page
-    assert "http-equiv" not in page
+    assert "1 configured" in client.get("/").text
 
 
-def test_landing_page_only_claims_what_is_true(client):
+def test_landing_only_claims_what_is_true(client):
     add(client, "demo")
+    landing = landing_part(client.get("/").text).lower()
+    assert "connected" not in landing
+    assert "drag" not in landing
+
+
+def test_home_workspace_works_like_the_health_page(client):
+    add(client, "demo")
+    client.post("/connectors/demo/pause")
     page = client.get("/").text
-    assert "connected" not in page.lower()
-    assert "drag" not in page.lower()
+    assert "Resume" in page and 'http-equiv="refresh" content="10"' in page
+    assert client.get("/", params={"find": "zzz"}).text.count("No source matches") == 1
+    assert 'action="/#workspace"' in page
+
+
+def test_page_has_one_main_landmark(client):
+    assert client.get("/").text.count("<main") == 1
 
 
 # Connector page and config taken apart

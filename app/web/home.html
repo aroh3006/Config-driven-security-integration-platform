@@ -1,12 +1,7 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Otto</title>
-<link rel="stylesheet" href="/static/otto.css?v={{ css_version }}">
-</head>
-<body>
+{% extends "base.html" %}
+{% block head %}<meta http-equiv="refresh" content="10">{% endblock %}
+{% block full_title %}Otto{% endblock %}
+{% block before_shell %}
 <div class="landing">
   <div class="landing-word" aria-hidden="true">OTTO</div>
 
@@ -15,10 +10,7 @@
     <a class="landing-plug" href="/ui/add">Plug in a source</a>
   </header>
 
-  {% if stubbed %}<div class="warn landing-note"><strong>Engine stubs active. Data on this page is fake.</strong></div>{% endif %}
-  {% if msg %}<div class="flash landing-note" role="status">{{ msg }}</div>{% endif %}
-
-  <main class="landing-main">
+  <div class="landing-main">
     <section class="landing-copy">
       <span class="label">[ Config-driven · security integration ]</span>
       <h1>Any tool.<br>One config.</h1>
@@ -53,15 +45,15 @@
       <a class="d-output" href="/ui/records/{{ label }}" style="top: {{ top }}px">{{ label }}<i aria-hidden="true"></i></a>
       {% endfor %}
     </section>
-  </main>
+  </div>
 
   <footer class="landing-strip">
     <div><span>Configuration</span><b>1 YAML file per source</b></div>
     <div><span>Sources</span><b>{{ configured }} configured</b></div>
     <div><span>Failure handling</span><b>Retry · rate limit · quarantine</b></div>
     <div><span>Common schema</span><b>Users · devices · alerts</b></div>
-    <a class="landing-open" href="/ui/health">Open workspace →</a>
+    <span class="landing-scroll">Scroll for the workspace ↓</span>
   </footer>
 </div>
-</body>
-</html>
+{% endblock %}
+{% block content %}{% include "_workspace.html" %}{% endblock %}

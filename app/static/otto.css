@@ -627,20 +627,7 @@ td.raw pre { max-height: 180px; overflow-y: auto; }
 .landing-strip div { flex: 1 1 180px; display: flex; flex-direction: column; gap: 6px; }
 .landing-strip span { color: var(--label); font-size: 11px; letter-spacing: 1.4px; text-transform: uppercase; }
 .landing-strip b { font-size: 14px; font-weight: 600; text-transform: uppercase; }
-.landing-open {
-  min-height: 44px;
-  padding: 0 22px;
-  display: inline-flex;
-  align-items: center;
-  border-radius: 999px;
-  background: #CCF2EC;
-  color: #0B3B36;
-  font-size: 14px;
-  font-weight: 600;
-  text-decoration: none;
-  white-space: nowrap;
-}
-.landing-open:hover { background: var(--teal-text); color: #0B3B36; }
+.landing-scroll { align-self: center; color: var(--muted); font-size: 13px; white-space: nowrap; }
 
 @media (min-width: 1500px) {
   .landing-main { justify-content: center; }
