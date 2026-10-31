@@ -364,7 +364,7 @@ def _mask_strings(value: Any) -> Any:
 def save_run_log(run_id: int, requests: list[dict[str, Any]], waits: list[float]) -> None:
     """Keep a run's request log, latest entries first if it is over the cap.
 
-    Text is masked one string at a time, so the stored JSON stays valid.
+    Text is masked one string at a time. That keeps the stored JSON valid.
     """
     kept = requests[-MAX_LOGGED_REQUESTS:]
     payload = {"requests": kept, "waits": waits, "dropped": len(requests) - len(kept)}
@@ -481,7 +481,7 @@ def mark_replayed(quarantine_id: int) -> None:
 # Connectors
 
 def _connector_dict(row: sqlite3.Row) -> dict[str, Any]:
-    """The scheduler tests `enabled is False`, so it must be a real boolean."""
+    """Return a connector row. The scheduler tests `enabled is False`, which needs a real boolean."""
     connector = dict(row)
     connector["enabled"] = bool(connector["enabled"])
     return connector

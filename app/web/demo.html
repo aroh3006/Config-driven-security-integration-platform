@@ -1,28 +1,46 @@
 {% extends "base.html" %}
+{% from "_icons.html" import status %}
 {% block title %}Demo controls{% endblock %}
 {% block content %}
-<h1>Demo controls</h1>
-<p>Set a fault on a connector, then press Run now on the <a href="/">health page</a>.</p>
-<div class="wrap"><table>
-  <tr><th>Connector</th><th>Status</th><th>Set fault</th></tr>
-  {% for c in connectors %}
-  <tr><td>{{ c.name }}</td><td><span class="badge {{ c.status }}">{{ c.status }}</span></td>
-    <td><form class="inline" method="post" action="/ui/demo">
-      <input type="hidden" name="connector" value="{{ c.name }}">
-      <select name="mode">{% for m in modes %}<option>{{ m }}</option>{% endfor %}</select>
-      <button>Set</button></form>
-      <form class="inline" method="post" action="/ui/demo">
-      <input type="hidden" name="connector" value="{{ c.name }}">
-      <input type="hidden" name="mode" value="off"><button>Clear</button></form></td></tr>
-  {% endfor %}
-</table></div>
-<h2>What each fault shows</h2>
-<ul class="plain">
-  <li><code>503x3</code>: three failures, retries at 1s, 2s and 4s, then success.</li>
-  <li><code>503x4</code>: one failure too many. The run is marked failed.</li>
-  <li><code>429:30</code>: rate limited, waits 30 seconds and carries on.</li>
-  <li><code>timeoutx4</code>: requests time out, retries run out and the run fails.</li>
-  <li><code>401</code>: the key is rejected with no retry, so health shows auth_failed.</li>
-  <li><code>badrecord</code>: one bad record goes to quarantine and the run continues.</li>
-</ul>
+<div class="head">
+  <div class="head-title"><h1>Demo controls</h1><span class="muted">Set a fault, then run the connector</span></div>
+  <a class="btn" href="/ui/live">Open live panel</a>
+</div>
+<section class="card" aria-label="Fault switches">
+  <span class="label">[ Fault switches ]</span>
+  <p class="note">Set a fault on a connector, then press Run now on the <a href="/">health table</a>. The scenario pills on the live panel do both in one press.</p>
+  <div class="wrap"><table>
+    <thead><tr><th>Connector</th><th>Status</th><th>Set fault</th></tr></thead>
+    <tbody>
+    {% for c in connectors %}
+    <tr><td class="name"><a href="/ui/live/{{ c.name|urlencode }}">{{ c.name }}</a></td><td>{{ status(c.status) }}</td>
+      <td><div class="cell-actions">
+        <form class="cell-actions" method="post" action="/ui/demo">
+          <input type="hidden" name="connector" value="{{ c.name }}">
+          <label class="sr-only" for="fault-{{ loop.index }}">Fault for {{ c.name }}</label>
+          <select id="fault-{{ loop.index }}" name="mode">{% for m in modes %}<option value="{{ m }}">{{ m }}</option>{% endfor %}</select>
+          <button aria-label="Set fault on {{ c.name }}">Set</button>
+        </form>
+        <form class="inline" method="post" action="/ui/demo">
+          <input type="hidden" name="connector" value="{{ c.name }}">
+          <input type="hidden" name="mode" value="off"><button aria-label="Clear fault on {{ c.name }}">Clear</button>
+        </form>
+      </div></td></tr>
+    {% else %}
+    <tr><td colspan="3">No connectors yet.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</section>
+<section class="card" aria-label="What each fault shows">
+  <span class="label">[ What each fault shows ]</span>
+  <div class="req-rows">
+    <div class="req"><code>503x3</code><span class="tag">Three failures, retries at 1 s, 2 s and 4 s, then success</span></div>
+    <div class="req"><code>503x4</code><span class="tag">One failure too many. The run is marked failed</span></div>
+    <div class="req"><code>429:30</code><span class="tag">Rate limited, waits 30 s and carries on</span></div>
+    <div class="req"><code>timeoutx4</code><span class="tag">Requests time out, retries run out and the run fails</span></div>
+    <div class="req"><code>401</code><span class="tag">The key is rejected with no retry. Health shows auth_failed</span></div>
+    <div class="req"><code>badrecord</code><span class="tag">One bad record goes to quarantine and the run continues</span></div>
+  </div>
+</section>
 {% endblock %}

@@ -184,7 +184,7 @@ pre {
 }
 .tabs input { position: absolute; opacity: 0; width: 1px; height: 1px; }
 .tabs label {
-  min-height: 36px;
+  min-height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -455,6 +455,7 @@ td a { color: var(--text); }
 td.num, th.num { font-family: var(--mono); text-align: right; white-space: nowrap; }
 td.name { min-width: 170px; color: var(--text); font-family: var(--mono); font-size: 12.5px; }
 td.err { min-width: 180px; color: var(--muted); font-size: 12.5px; }
+td.cell-mono { color: var(--text); font: 400 12.5px var(--mono); white-space: nowrap; }
 td.when { color: var(--muted); font: 400 12px var(--mono); white-space: nowrap; }
 td.raw { min-width: 280px; }
 td.raw pre { max-height: 180px; overflow-y: auto; }

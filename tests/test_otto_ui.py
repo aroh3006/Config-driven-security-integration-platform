@@ -299,6 +299,70 @@ def test_configs_page_links_to_take_apart(client):
     assert 'href="/ui/connector/demo/config"' in client.get("/ui/configs").text
 
 
+# Remaining pages
+
+ALL_PAGES = (
+    "/", "/ui/add", "/ui/configs", "/ui/quarantine", "/ui/records/users", "/ui/records/devices", "/ui/records/alerts",
+    "/ui/people", "/ui/kev", "/ui/demo", "/ui/audit", "/ui/connector/demo", "/ui/connector/demo/config", "/ui/live/demo",
+)
+
+
+@pytest.mark.parametrize("path", ALL_PAGES)
+def test_every_page_uses_the_shell_and_stays_script_free(client, path):
+    add(client, "demo")
+    client.post("/connectors/demo/run")
+    page = client.get(path).text
+    assert "<script" not in page
+    assert 'class="rail"' in page and 'class="side"' in page
+    assert "/static/otto.css" in page
+    assert " · Otto</title>" in page
+    assert 'style="' not in page.split('id="main"')[0]
+
+
+@pytest.mark.parametrize("path", ALL_PAGES)
+def test_every_control_has_a_name(client, path):
+    add(client, "demo")
+    page = client.get(path).text
+    for field_id in re.findall(r'<(?:input|select|textarea)\b[^>]*\bid="([^"]+)"', page):
+        assert f'for="{field_id}"' in page, field_id
+    for icon_link in re.findall(r'<a\b[^>]*>\s*<svg', page):
+        assert "aria-label" in icon_link, icon_link
+
+
+def test_data_pages_share_a_sub_navigation(client):
+    for path, label in (("/ui/records/users", "Users"), ("/ui/people", "People"), ("/ui/kev", "KEV match")):
+        page = client.get(path).text
+        assert 'aria-label="Data"' in page
+        assert re.search(rf'class="pill on"[^>]*aria-current="page">{label}<', page), path
+
+
+def test_quarantine_page_filters_and_counts(client):
+    add(client, "alpha")
+    add(client, "beta")
+    db.add_quarantine("alpha", None, {"x": 1}, "reason-alpha")
+    done = db.add_quarantine("beta", None, {"id": "ok"}, "reason-beta")
+    client.post(f"/ui/quarantine/{done}/replay")
+    page = client.get("/ui/quarantine").text
+    assert "2 records shown, 1 waiting" in page
+    assert ">Replayed<" in page.replace("</i>", ">")
+    only = client.get("/ui/quarantine", params={"connector": "alpha"}).text
+    assert "reason-alpha" in only and "reason-beta" not in only
+
+
+def test_demo_page_links_to_live_and_labels_each_select(client):
+    add(client, "demo")
+    page = client.get("/ui/demo").text
+    assert 'href="/ui/live/demo"' in page
+    assert 'for="fault-1"' in page
+    assert "timeoutx4" in page
+
+
+def test_audit_page_escapes_and_masks(client):
+    db.audit("web", "x", "<b>target</b>", "password=hunter22")
+    page = client.get("/ui/audit").text
+    assert "<b>target</b>" not in page and "hunter22" not in page
+
+
 def test_new_pages_load(client):
     add(client, "demo")
     assert "demo.yaml" in client.get("/ui/configs").text

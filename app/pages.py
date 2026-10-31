@@ -40,7 +40,7 @@ ENTITY_PAGES = {"users": "user", "devices": "device", "alerts": "alert"}
 
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "web"))
 templates.env.globals["tone"] = theme.tone
-# Changes when the stylesheet changes, so a browser never shows an old copy.
+# Changes when the stylesheet changes. A browser then never shows an old copy.
 templates.env.globals["css_version"] = int((Path(__file__).parent / "static" / "otto.css").stat().st_mtime)
 
 HOME_ENGINE = {
@@ -234,8 +234,17 @@ def build_router(
         return _render(request, "configs.html", nav="configs", rows=health.health_rows())
 
     @router.get("/ui/quarantine", response_class=HTMLResponse)
-    def quarantine_page(request: Request) -> HTMLResponse:
-        return _render(request, "quarantine.html", nav="quarantine", items=db.list_quarantine(limit=200))
+    def quarantine_page(request: Request, connector: str | None = None) -> HTMLResponse:
+        items = db.list_quarantine(connector or None, limit=200)
+        return _render(
+            request,
+            "quarantine.html",
+            nav="quarantine",
+            items=items,
+            waiting=sum(1 for item in items if not item["replayed"]),
+            connector=connector or "",
+            connector_names=[row["name"] for row in db.list_connectors()],
+        )
 
     @router.get("/ui/connector/{name}", response_class=HTMLResponse)
     def connector_view(request: Request, name: str) -> HTMLResponse:

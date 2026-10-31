@@ -92,7 +92,7 @@ def _pick(form: dict[str, str], prefix: str, fields: tuple[str, ...]) -> dict[st
 
 
 def _current_config(form: dict[str, str], problems: list[dict[str, str]]) -> dict[str, Any]:
-    """Read the YAML box, so keys the form has no field for can be kept."""
+    """Read the YAML box. Keys the form has no field for are kept from here."""
     text = form.get("yaml", "")
     if not text.strip():
         return {}
@@ -211,7 +211,7 @@ def form_to_yaml(form: dict[str, str]) -> tuple[str, list[dict[str, str]]]:
 
 
 def suggestions(profile: dict[str, Any], entity: str) -> list[dict[str, Any]]:
-    """One row per schema field: what the profiler picked, or that nothing fits."""
+    """One row per schema field: what the profiler picked. A field with no match has no code."""
     table = {"user": "users", "device": "devices", "alert": "alerts"}.get(entity, "alerts")
     guesses = profile.get("guesses") or {}
     rows = []

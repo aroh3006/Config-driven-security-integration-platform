@@ -1,6 +1,6 @@
 """Works out the patch panel: which sockets show and where each cable runs.
 
-Rows have a fixed height, so every y position is known on the server. The cable
+Rows have a fixed height. That makes every y position known on the server. The cable
 columns stretch sideways using a viewBox that is 100 units wide.
 """
 

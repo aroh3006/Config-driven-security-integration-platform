@@ -32,6 +32,22 @@ Tests:
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
+## Web app
+
+The web app is called Otto. It runs with no JavaScript and no CDN. It keeps working with the network off.
+
+| Page | What it does |
+| --- | --- |
+| `/` | Patch panel and the health table |
+| `/ui/live/{name}` | Press a scenario, then read the labelled request log |
+| `/ui/connector/{name}` | Run history, quarantine and test results |
+| `/ui/connector/{name}/config` | A config split into the five parts of the engine it drives |
+| `/ui/add` | Add a source from a form or a pasted sample |
+| `/ui/records/{users,devices,alerts}`, `/ui/people`, `/ui/kev` | The stored data |
+| `/ui/quarantine`, `/ui/audit`, `/ui/demo` | Bad records, the audit log and manual fault switches |
+
+Geist and Geist Mono are served from `app/static/fonts` under the SIL Open Font License (see `OFL.txt`).
+
 ## Adding a source
 
 1. Open **Add source**. Paste a sample response or fill in the form.

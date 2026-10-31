@@ -293,7 +293,7 @@ def _copy(kind: str, name: str, run: dict[str, Any] | None, state: dict[str, Any
             "tone": "amber",
             "line": f"{pulled:,} records · {run['pages']} pages",
             "detail": "The source returned 429. Otto waited, then carried on. Nothing was lost."
-            + (f" {bad} bad records went to quarantine." if bad else ""),
+            + (f" Bad records sent to quarantine: {bad}." if bad else ""),
             "engine": (f"{name} recovered", "Waited as asked, then resumed"),
             "tag": {"text": "429 · waited", "tone": "amber"},
             "caption": (
@@ -440,7 +440,7 @@ def build(name: str, connector: dict[str, Any], rows: list[dict[str, Any]], stat
     quarantined = [item for item in db.list_quarantine(name, limit=50) if run and item["run_id"] == run["id"]]
 
     # Mock sources always hold a few broken records. After a plain healthy run the
-    # page still shows the request, and the status card reports what was set aside.
+    # page still shows the request. The status card reports what was set aside.
     healthy_press = not state["active"] and kind == "bad_record" and state.get("scenario") == "healthy"
     heading = "[ The request, labelled ]"
     request_rows: list[dict[str, str]] = []

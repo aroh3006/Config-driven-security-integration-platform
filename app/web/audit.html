@@ -1,9 +1,16 @@
 {% extends "base.html" %}
 {% block title %}Audit log{% endblock %}
 {% block content %}
-<h1>Audit log</h1>
-<div class="wrap"><table>
-  <tr><th>When</th><th>Actor</th><th>Action</th><th>Target</th><th>Detail</th></tr>
-  {% for row in rows %}<tr><td>{{ row.ts }}</td><td>{{ row.actor }}</td><td>{{ row.action }}</td><td>{{ row.target or "" }}</td><td>{{ row.detail or "" }}</td></tr>{% endfor %}
-</table></div>
+<div class="head"><div class="head-title"><h1>Audit log</h1><span class="muted">Who changed what. Details are masked.</span></div></div>
+<section class="card" aria-label="Audit log">
+  <span class="label">[ {{ rows|length }} entries, newest first ]</span>
+  {% if rows %}
+  <div class="wrap"><table>
+    <thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Target</th><th>Detail</th></tr></thead>
+    <tbody>
+    {% for row in rows %}<tr><td class="when">{{ row.ts|replace("T", " ")|replace("Z", "") }}</td><td>{{ row.actor }}</td><td class="cell-mono">{{ row.action }}</td><td class="cell-mono">{{ row.target or "" }}</td><td class="err">{{ row.detail or "" }}</td></tr>{% endfor %}
+    </tbody>
+  </table></div>
+  {% else %}<p class="note">No audit entries yet.</p>{% endif %}
+</section>
 {% endblock %}
