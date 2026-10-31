@@ -319,7 +319,7 @@ def test_web_app_on_the_real_engine(monkeypatch, config_folder, mock_transport):
 
     with TestClient(create_app()) as client:
         assert db.get_connector("cisa-kev")["approved_hash"]
-        page = client.get("/").text
+        page = client.get("/ui/health").text
         assert "Engine stubs active" not in page
         assert "cisa-kev" in page
 
@@ -329,6 +329,6 @@ def test_web_app_on_the_real_engine(monkeypatch, config_folder, mock_transport):
         assert "Draft made from your sample" in filled.text
 
         assert client.post("/connectors/cisa-kev/pause").json()["status"] == "paused"
-        assert "Resume" in client.get("/").text
+        assert "Resume" in client.get("/ui/health").text
         assert client.post("/faults", json={"connector": "cisa-kev", "mode": "503x3"}).status_code == 200
         assert client.post("/faults", json={"connector": "cisa-kev", "mode": "off"}).status_code == 200

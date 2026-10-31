@@ -51,6 +51,29 @@ HOME_ENGINE = {
 }
 
 
+# The landing page shows how sources plug in. It is a picture of the product, not live status.
+LANDING_SOURCES = (
+    ("Okta", "API token · cursor", 0),
+    ("GitHub", "Bearer · page link", 74),
+    ("Jira", "Basic · page token", 148),
+    ("NVD", "API key · offset", 222),
+    ("CISA KEV", "No login · one file", 296),
+)
+LANDING_CABLES_IN = (
+    "M160 24 C 235 24, 235 118, 310 118",
+    "M160 98 C 235 98, 235 148, 310 148",
+    "M160 172 C 235 172, 235 178, 310 178",
+    "M160 246 C 235 246, 235 208, 310 208",
+    "M160 320 C 235 320, 235 238, 310 238",
+)
+LANDING_CABLES_OUT = (
+    "M530 138 C 580 138, 580 74, 630 74",
+    "M530 178 C 580 178, 580 148, 630 148",
+    "M530 218 C 580 218, 580 222, 630 222",
+)
+LANDING_OUTPUTS = (("users", 50), ("devices", 124), ("alerts", 198))
+
+
 def _spawn(target: Callable[[], None]) -> None:
     """Start a long run on its own thread. A closed browser tab cannot cancel it."""
     threading.Thread(target=target, daemon=True).start()
@@ -139,11 +162,29 @@ def build_router(
 
     @router.get("/", response_class=HTMLResponse)
     def health_page(request: Request) -> HTMLResponse:
+        """The landing page. It stands alone, with no sidebar."""
+        return templates.TemplateResponse(
+            request,
+            "home.html",
+            {
+                "stubbed": engine.stubbed_functions(),
+                "msg": request.query_params.get("msg"),
+                "configured": len(db.list_connectors()),
+                "sources": LANDING_SOURCES,
+                "cables_in": LANDING_CABLES_IN,
+                "cables_out": LANDING_CABLES_OUT,
+                "outputs": LANDING_OUTPUTS,
+                "chips": HOME_ENGINE["chips"],
+            },
+        )
+
+    @router.get("/ui/health", response_class=HTMLResponse)
+    def health_table_page(request: Request) -> HTMLResponse:
         rows = health.health_rows()
         return _render(
             request,
             "health.html",
-            nav="home",
+            nav="health",
             rows=rows,
             p=patch.build(rows),
             engine=HOME_ENGINE,
@@ -256,7 +297,7 @@ def build_router(
     ) -> Response:
         if db.get_connector(name) is None:
             raise HTTPException(404, f"unknown connector {name!r}")
-        back = "/"
+        back = "/ui/health"
         if action == "test":
             return connector_page(request, name, test=_test_view(engine.test_connection(name)))
         if action == "run":

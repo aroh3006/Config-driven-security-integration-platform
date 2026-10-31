@@ -138,7 +138,7 @@ def test_sidebar_search_filters_rows_not_totals():
 
 def test_every_rail_link_has_a_label_and_works(client):
     add(client, "demo")
-    page = client.get("/").text
+    page = client.get("/ui/health").text
     for _, label, href in sidebar.RAIL:
         assert f'aria-label="{label}"' in page
         assert client.get(href).status_code == 200, href
@@ -214,7 +214,7 @@ def test_output_totals_add_up():
 
 def test_home_page_draws_the_panel(client):
     add(client, "demo")
-    page = client.get("/").text
+    page = client.get("/ui/health").text
     assert "CONNECT" in page and "<svg" in page
     assert "Plug in a new source" in page
     assert 'http-equiv="refresh" content="10"' in page
@@ -223,11 +223,47 @@ def test_home_page_draws_the_panel(client):
 def test_home_shows_more_link_for_many_connectors(client):
     for n in range(9):
         add(client, f"src{n}")
-    assert "+3 more" in client.get("/").text
+    assert "+3 more" in client.get("/ui/health").text
 
 
 def test_home_with_no_connectors_still_renders(client):
     assert client.get("/").status_code == 200
+
+
+# Landing page
+
+def test_landing_page_stands_alone_with_no_sidebar(client):
+    page = client.get("/").text
+    assert 'class="rail"' not in page and 'class="side"' not in page
+    assert "<title>Otto</title>" in page
+    assert ">OTTO<" in page and "CONNECT" not in page
+    assert ">Otto<" in page
+    assert "Any tool." in page and "One config." in page
+    assert "<script" not in page
+
+
+def test_landing_page_has_the_five_sources_and_links_onward(client):
+    page = client.get("/").text
+    for name in ("Okta", "GitHub", "Jira", "NVD", "CISA KEV"):
+        assert f"<b>{name}</b>" in page
+    assert page.count('href="/ui/add"') == 2
+    assert 'href="/ui/health"' in page
+    assert 'href="/ui/records/alerts"' in page
+
+
+def test_landing_page_counts_real_connectors_and_does_not_refresh(client):
+    assert "0 configured" in client.get("/").text
+    add(client, "demo")
+    page = client.get("/").text
+    assert "1 configured" in page
+    assert "http-equiv" not in page
+
+
+def test_landing_page_only_claims_what_is_true(client):
+    add(client, "demo")
+    page = client.get("/").text
+    assert "connected" not in page.lower()
+    assert "drag" not in page.lower()
 
 
 # Connector page and config taken apart
@@ -302,7 +338,7 @@ def test_configs_page_links_to_take_apart(client):
 # Remaining pages
 
 ALL_PAGES = (
-    "/", "/ui/add", "/ui/configs", "/ui/quarantine", "/ui/records/users", "/ui/records/devices", "/ui/records/alerts",
+    "/ui/health", "/ui/add", "/ui/configs", "/ui/quarantine", "/ui/records/users", "/ui/records/devices", "/ui/records/alerts",
     "/ui/people", "/ui/kev", "/ui/demo", "/ui/audit", "/ui/connector/demo", "/ui/connector/demo/config", "/ui/live/demo",
 )
 

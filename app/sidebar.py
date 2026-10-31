@@ -9,6 +9,7 @@ from app import health
 GROUPS = (("users", "user"), ("devices", "device"), ("alerts", "alert"))
 RAIL = (
     ("home", "Home", "/"),
+    ("health", "Health", "/ui/health"),
     ("live", "Live panel", "/ui/live"),
     ("sources", "Sources", "/ui/add"),
     ("configs", "Configs", "/ui/configs"),

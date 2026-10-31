@@ -1,16 +1,12 @@
 {% extends "base.html" %}
 {% from "_icons.html" import status %}
 {% block head %}<meta http-equiv="refresh" content="10">{% endblock %}
-{% block title %}Home{% endblock %}
+{% block title %}Health{% endblock %}
 {% block content %}
-<section class="hero">
-  <div class="hero-copy">
-    <span class="label">[ Config-driven · security integration ]</span>
-    <h1>Any tool.<br>One config.</h1>
-    <p class="note">One engine pulls users, devices and alerts from every security tool. A new source is a config file, not new code.</p>
-  </div>
+<div class="head">
+  <div class="head-title"><h1>Health</h1><span class="muted">Every source, right now</span></div>
   <a class="btn" href="/ui/add">Plug in a source</a>
-</section>
+</div>
 
 <section class="patch-box" aria-label="Patch panel">
   <div class="hero-word" aria-hidden="true">CONNECT</div>
