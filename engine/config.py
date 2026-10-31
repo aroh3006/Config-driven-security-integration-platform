@@ -30,6 +30,7 @@ FIELD_ALIASES = {"user": {"last_seen": "last_login"}}  # some sources call this 
 
 TRANSFORMS = ["lower", "upper", "trim", "int", "float", "str", "to_utc"]
 SCHEDULE_RE = re.compile(r"^\s*(?:every\s+)?(\d+)\s*(s|sec|secs|seconds?|m|min|mins|minutes?|h|hr|hrs|hours?)\s*$", re.I)
+SECRET_REF = re.compile(r"\{secret:([a-z0-9_]+)\}")
 
 
 class Strict(BaseModel):
@@ -43,6 +44,7 @@ class Source(Strict):
     allow_hosts: list[str] = Field(default_factory=list)
     allow_private_network: bool = False  # needed when a source lives on a LAN IP (e.g. venue server)
     path: Optional[str] = None  # file source only; must stay inside the data folder
+    ca_file: Optional[str] = None  # extra trusted CA for on-prem hosts; must stay inside the data folder
 
     @model_validator(mode="after")
     def _check(self):
@@ -104,8 +106,46 @@ class OAuth2ClientCredentials(Strict):
     extra_params: dict[str, str] = Field(default_factory=dict)
 
 
+class SessionLogin(Strict):
+    """One login call that returns a token to send on every later request.
+
+    Credentials can go in a Basic header or in `headers`, `params` and `body`.
+    There {secret:name} stands for a secret. With no token_path or token_header the server
+    keeps the session in a cookie.
+    """
+
+    type: Literal["session_login"]
+    login_url: str
+    method: Literal["GET", "POST"] = "POST"
+    username_secret: Optional[str] = None
+    password_secret: Optional[str] = None
+    headers: dict[str, str] = Field(default_factory=dict)
+    params: dict[str, str] = Field(default_factory=dict)
+    body: Optional[Any] = None
+    token_path: Optional[str] = None
+    token_header: Optional[str] = None
+    send_header: Optional[str] = None
+    send_param: Optional[str] = None
+    prefix: str = ""
+    ttl_s: float = 600
+
+    @model_validator(mode="after")
+    def _check(self):
+        if self.token_path and self.token_header:
+            raise ValueError("set token_path or token_header, not both")
+        if bool(self.username_secret) != bool(self.password_secret):
+            raise ValueError("Basic login needs both `username_secret` and `password_secret`")
+        reads_token = bool(self.token_path or self.token_header)
+        sends = [name for name in (self.send_header, self.send_param) if name]
+        if reads_token and len(sends) != 1:
+            raise ValueError("say where the token goes: set `send_header` or `send_param`")
+        if sends and not reads_token:
+            raise ValueError("`send_header` and `send_param` need `token_path` or `token_header`")
+        return self
+
+
 Auth = Annotated[
-    Union[NoAuth, ApiKeyAuth, BasicAuth, BearerAuth, OAuth2ClientCredentials],
+    Union[NoAuth, ApiKeyAuth, BasicAuth, BearerAuth, OAuth2ClientCredentials, SessionLogin],
     Field(discriminator="type"),
 ]
 
@@ -117,9 +157,11 @@ class Request(Strict):
     path: str = ""
     params: dict[str, Any] = Field(default_factory=dict)
     headers: dict[str, str] = Field(default_factory=dict)
+    secret_headers: dict[str, str] = Field(default_factory=dict)  # header name -> secret name
     body: Optional[Any] = None
     format: Literal["json", "ndjson", "csv"] = "json"
     records_path: str = ""
+    error_path: Optional[str] = None  # a value here means failure, for APIs that report errors in a 200
 
     @field_validator("method", mode="before")
     @classmethod
@@ -161,6 +203,7 @@ class OffsetPaging(Strict):
     start: int = 0
     total_path: Optional[str] = None
     param_in: Literal["query", "body"] = "query"
+    end_param: Optional[str] = None  # for APIs that take an end index in place of a page size
 
 
 class BodyTokenPaging(Strict):
@@ -169,6 +212,7 @@ class BodyTokenPaging(Strict):
     token_param: str
     token_in: Literal["query", "body"] = "query"
     stop_path: Optional[str] = None  # e.g. isLast: stop when this field is true
+    has_more_path: Optional[str] = None  # e.g. pageInfo.hasNextPage: stop when this field is false
 
 
 class BodyNextUrlPaging(Strict):
@@ -338,7 +382,22 @@ class Config(Strict):
             names += [n for n in (a.username_secret, a.secret) if n]
         elif isinstance(a, OAuth2ClientCredentials):
             names += [a.client_id_secret, a.client_secret_secret]
-        return names
+        elif isinstance(a, SessionLogin):
+            names += [n for n in (a.username_secret, a.password_secret) if n]
+            names += secret_refs([a.headers, a.params, a.body])
+        names += self.request.secret_headers.values()
+        return list(dict.fromkeys(names))
+
+
+def secret_refs(value: Any) -> list[str]:
+    """Names used as {secret:name} anywhere inside strings, dicts and lists."""
+    if isinstance(value, str):
+        return SECRET_REF.findall(value)
+    if isinstance(value, dict):
+        value = list(value.values())
+    if isinstance(value, list):
+        return [name for item in value for name in secret_refs(item)]
+    return []
 
 
 def schedule_seconds(text: str) -> int:
@@ -460,6 +519,10 @@ def _semantic_checks(cfg: Config) -> list[dict]:
             th = (urlsplit(cfg.auth.token_url).hostname or "").lower()
             if not host_allowed(th, cfg.source.allow_hosts):
                 err("auth.token_url", f"token_url host '{th}' is not in allow_hosts", f"add '{th}' to allow_hosts")
+        if isinstance(cfg.auth, SessionLogin):
+            lh = (urlsplit(cfg.auth.login_url).hostname or "").lower()
+            if not host_allowed(lh, cfg.source.allow_hosts):
+                err("auth.login_url", f"login_url host '{lh}' is not in allow_hosts", f"add '{lh}' to allow_hosts")
         if cfg.source.allow_private_network:
             warn("source.allow_private_network", "private network addresses are allowed for this connector",
                  "only use this for sources on your own LAN; cloud metadata addresses stay blocked")

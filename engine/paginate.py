@@ -20,7 +20,7 @@ from .config import (
     OffsetPaging,
     PageNumberPaging,
 )
-from .parse import get_path
+from .parse import get_path, set_path
 
 PageReq = dict  # {"url": str, "params": dict|None, "body": Any}
 PAGINATION_REGISTRY: dict[str, type["Paginator"]] = {}
@@ -52,7 +52,7 @@ def _with_param(req: PageReq, name: str, value: Any, where: str = "query") -> Pa
         body = new.get("body") or {}
         if not isinstance(body, dict):
             body = {}
-        body[name] = value
+        set_path(body, name, value)
         new["body"] = body
     else:
         params = new.get("params") or {}
@@ -109,14 +109,20 @@ class OffsetPaginator(Paginator):
     p: OffsetPaging
 
     def _get(self, req: PageReq, name: str, default: Any) -> Any:
-        holder = req.get("body") if self.p.param_in == "body" else req.get("params")
-        return (holder or {}).get(name, default)
+        if self.p.param_in == "body":
+            return get_path(req.get("body") or {}, name, default)
+        return (req.get("params") or {}).get(name, default)
+
+    def _with_end(self, req: PageReq, offset: int) -> PageReq:
+        if not self.p.end_param:
+            return req
+        return _with_param(req, self.p.end_param, offset + self.p.limit, self.p.param_in)
 
     def first(self, base):
         req = _with_param(base, self.p.offset_param, self.p.start, self.p.param_in)
-        if self.p.limit_param:
+        if self.p.limit_param and not self.p.end_param:
             req = _with_param(req, self.p.limit_param, self.p.limit, self.p.param_in)
-        return req
+        return self._with_end(req, self.p.start)
 
     def next(self, current, resp, parsed, records):
         if not records:
@@ -128,7 +134,7 @@ class OffsetPaginator(Paginator):
                 return None
         elif len(records) < self.p.limit:
             return None
-        return _with_param(current, self.p.offset_param, offset, self.p.param_in)
+        return self._with_end(_with_param(current, self.p.offset_param, offset, self.p.param_in), offset)
 
 
 @register("body_token")
@@ -139,6 +145,8 @@ class BodyTokenPaginator(Paginator):
 
     def next(self, current, resp, parsed, records):
         if self.p.stop_path and get_path(parsed, self.p.stop_path) is True:
+            return None
+        if self.p.has_more_path and not get_path(parsed, self.p.has_more_path):
             return None
         token = get_path(parsed, self.p.token_path)
         if token in (None, "", [], {}):

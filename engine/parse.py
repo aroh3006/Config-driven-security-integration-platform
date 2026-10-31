@@ -47,6 +47,20 @@ def has_path(obj: Any, path: str) -> bool:
     return get_path(obj, path, _MISSING) is not _MISSING
 
 
+def set_path(obj: dict, path: str, value: Any) -> None:
+    """Write a value at a dotted path, creating objects on the way. A literal key wins."""
+    if path in obj:
+        obj[path] = value
+        return
+    *parents, leaf = path.split(".")
+    for key in parents:
+        child = obj.get(key)
+        if not isinstance(child, dict):
+            child = obj[key] = {}
+        obj = child
+    obj[leaf] = value
+
+
 class BadLine:
     """A line in an NDJSON/CSV body that could not be parsed. Quarantined by the runner."""
 

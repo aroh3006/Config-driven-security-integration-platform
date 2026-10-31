@@ -9,11 +9,12 @@ from __future__ import annotations
 
 import base64
 import time
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 from . import secrets
-from .config import ApiKeyAuth, BasicAuth, BearerAuth, Config, NoAuth, OAuth2ClientCredentials
+from .config import SECRET_REF, ApiKeyAuth, BasicAuth, BearerAuth, Config, NoAuth, OAuth2ClientCredentials, SessionLogin
 from .errors import AuthFailed, EngineError
+from .parse import get_path
 
 if TYPE_CHECKING:
     from .http import HttpClient
@@ -86,14 +87,44 @@ class BearerPlugin(AuthPlugin):
         headers["Authorization"] = self.auth.prefix + secrets.get_secret(self.auth.secret)
 
 
-@register("oauth2_client_credentials")
-class OAuth2ClientCredentialsPlugin(AuthPlugin):
-    """RFC 6749 section 4.4. Token cached until 30s before expiry; refreshed once on 401."""
+def fill_secrets(value: Any) -> Any:
+    """Replace {secret:name} inside strings, dicts and lists with the secret's value."""
+    if isinstance(value, str):
+        return SECRET_REF.sub(lambda match: secrets.get_secret(match.group(1)), value)
+    if isinstance(value, dict):
+        return {key: fill_secrets(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [fill_secrets(item) for item in value]
+    return value
 
-    auth: OAuth2ClientCredentials
+
+class CachedTokenPlugin(AuthPlugin):
+    """Keeps a fetched token until it expires. A 401 drops it so the next try fetches a new one."""
+
     can_refresh = True
     # tokens are cached per connector so scheduled runs reuse them
     _cache: dict[str, tuple[str, float, str]] = {}
+
+    def _fetch(self) -> tuple[str, float, str]:  # pragma: no cover - interface
+        raise NotImplementedError
+
+    def _token(self, force: bool = False) -> tuple[str, str]:
+        cached = self._cache.get(self.cfg.name)
+        if force or not cached or cached[1] <= time.time():
+            cached = self._fetch()
+            self._cache[self.cfg.name] = cached
+        return cached[0], cached[2]
+
+    def refresh(self) -> bool:
+        self._cache.pop(self.cfg.name, None)
+        return True
+
+
+@register("oauth2_client_credentials")
+class OAuth2ClientCredentialsPlugin(CachedTokenPlugin):
+    """RFC 6749 section 4.4. Token cached until 30s before expiry; refreshed once on 401."""
+
+    auth: OAuth2ClientCredentials
 
     def _fetch(self) -> tuple[str, float, str]:
         if self.client is None:
@@ -129,20 +160,75 @@ class OAuth2ClientCredentialsPlugin(AuthPlugin):
             token_type = "Bearer"
         return token, time.time() + max(expires_in - 30, 5), token_type
 
-    def _token(self, force: bool = False) -> tuple[str, str]:
-        cached = self._cache.get(self.cfg.name)
-        if force or not cached or cached[1] <= time.time():
-            cached = self._fetch()
-            self._cache[self.cfg.name] = cached
-        return cached[0], cached[2]
-
     def apply(self, headers, params):
         token, token_type = self._token()
         headers["Authorization"] = f"{token_type} {token}"
 
+
+@register("session_login")
+class SessionLoginPlugin(CachedTokenPlugin):
+    """Log in with one call and send what it returns. A 401 later triggers one fresh login.
+
+    Cookie sessions need nothing sent by hand because the HTTP client keeps the cookie.
+    The cookie jar lives for one run. Those sessions log in once per run.
+    """
+
+    auth: SessionLogin
+
+    def __init__(self, cfg: Config):
+        super().__init__(cfg)
+        self._cookie_session_open = False
+
+    def _login(self) -> Any:
+        if self.client is None:
+            raise EngineError("session login plugin is not bound to an HTTP client")
+        a = self.auth
+        headers = {"Accept": "application/json", **fill_secrets(a.headers)}
+        if a.username_secret:
+            pair = f"{secrets.get_secret(a.username_secret)}:{secrets.get_secret(a.password_secret)}"
+            basic = base64.b64encode(pair.encode()).decode()
+            secrets.register(basic)
+            headers["Authorization"] = f"Basic {basic}"
+        resp = self.client.raw_request(
+            a.method, a.login_url, label="login", headers=headers, params=fill_secrets(a.params), json_body=fill_secrets(a.body)
+        )
+        if resp.status_code in (400, 401, 403):
+            raise AuthFailed(f"login rejected the credentials (HTTP {resp.status_code})")
+        if resp.status_code >= 300:
+            raise EngineError(f"login endpoint returned HTTP {resp.status_code}")
+        return resp
+
+    def _fetch(self) -> tuple[str, float, str]:
+        a = self.auth
+        resp = self._login()
+        if a.token_header:
+            token = resp.headers.get(a.token_header)
+        else:
+            try:
+                token = get_path(resp.json(), a.token_path)
+            except ValueError:
+                token = None
+        if not isinstance(token, str) or not token:
+            raise AuthFailed(f"login response has no token at '{a.token_header or a.token_path}'")
+        secrets.register(token)
+        return token, time.time() + a.ttl_s, ""
+
+    def apply(self, headers, params):
+        a = self.auth
+        if not (a.token_path or a.token_header):
+            if not self._cookie_session_open:
+                self._login()
+                self._cookie_session_open = True
+            return
+        value = a.prefix + self._token()[0]
+        if a.send_header:
+            headers[a.send_header] = value
+        else:
+            params[a.send_param] = value
+
     def refresh(self) -> bool:
-        self._cache.pop(self.cfg.name, None)
-        return True
+        self._cookie_session_open = False
+        return super().refresh()
 
 
 def make_auth(cfg: Config) -> AuthPlugin:

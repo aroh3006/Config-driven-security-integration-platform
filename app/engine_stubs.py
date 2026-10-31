@@ -17,7 +17,7 @@ import yaml
 from store import db
 
 ENTITIES = {"user", "device", "alert"}
-AUTH_TYPES = {"none", "api_key", "basic", "bearer", "oauth2_client_credentials"}
+AUTH_TYPES = {"none", "api_key", "basic", "bearer", "oauth2_client_credentials", "session_login"}
 PAGINATION_TYPES = {"none", "link_header", "page_number", "offset", "body_token", "body_next_url"}
 REQUIRED_KEYS = ("name", "entity", "source", "map")
 FAULT_MODE_RE = re.compile(r"^(503x\d+|429:\d+|timeout(x\d+)?|401|badrecord)$")

@@ -14,6 +14,7 @@ from __future__ import annotations
 import email.utils
 import logging
 import random
+import ssl
 import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
@@ -25,8 +26,8 @@ from . import faults
 from .auth import AuthPlugin
 from .config import Config
 from .errors import AuthFailed, HttpError, RetryExhausted, SecurityError
-from .secrets import mask, mask_url
-from .security import Resolver, check_url
+from .secrets import get_secret, mask, mask_url
+from .security import Resolver, check_url, safe_file_path
 
 log = logging.getLogger("engine.http")
 USER_AGENT = "mitigata-config-connector/0.1"
@@ -88,6 +89,7 @@ class HttpClient:
         self._client = httpx.Client(
             transport=transport,
             timeout=httpx.Timeout(cfg.limits.timeout_s),
+            verify=self._tls_verify(),
             follow_redirects=False,
             headers={"User-Agent": USER_AGENT, "Accept": "application/json, text/csv, */*"},
         )
@@ -117,16 +119,19 @@ class HttpClient:
         while True:
             attempt += 1
             self._pace()
-            headers = {**cfg.request.headers, **(extra_headers or {})}
+            plain_headers = {**cfg.request.headers, **(extra_headers or {})}
+            headers = dict(plain_headers)
             query = {k: v for k, v in (params or {}).items() if v is not None}
             self.auth.apply(headers, query)
+            headers.update({name: get_secret(secret) for name, secret in cfg.request.secret_headers.items()})
+            credentials = set(headers) - set(plain_headers)
             fault = faults.take(cfg.name, faults.HTTP_KINDS)
             started = time.perf_counter()
             try:
                 if fault:
                     resp = self._fake_response(fault, method, url)
                 else:
-                    resp = self._send(method, url, query, json_body, headers)
+                    resp = self._send(method, url, query, json_body, headers, credentials)
             except (httpx.TimeoutException, httpx.TransportError) as e:
                 kind = "timeout" if isinstance(e, httpx.TimeoutException) else "connection error"
                 self._log(method, url, query, None, started, attempt, kind + (" (injected)" if fault else ""))
@@ -168,27 +173,53 @@ class HttpClient:
             raise HttpError(f"HTTP {status} from {self._host(url)}: {mask(resp.text[:300])}")
 
     def raw_post_form(self, url: str, data: dict, headers: dict) -> httpx.Response:
-        """Token requests for OAuth2. Same guard and retry rules, no auth plugin."""
+        """Token requests for OAuth2."""
+        return self.raw_request("POST", url, label="token", headers=headers, data=data)
+
+    def raw_request(
+        self,
+        method: str,
+        url: str,
+        *,
+        label: str,
+        headers: dict,
+        data: Optional[dict] = None,
+        json_body: Any = None,
+        params: Optional[dict] = None,
+    ) -> httpx.Response:
+        """Login and token calls. Same guard and retry rules, no auth plugin."""
         delays = list(self.cfg.retry.delays_s)
         for attempt in range(len(delays) + 1):
             started = time.perf_counter()
             try:
                 check_url(url, self.cfg, self.resolver)
-                resp = self._client.post(url, data=data, headers=headers)
+                resp = self._client.request(method, url, headers=headers, data=data, json=json_body, params=params or None)
             except (httpx.TimeoutException, httpx.TransportError):
-                self._log("POST", url, None, None, started, attempt + 1, "token request failed")
+                self._log(method, url, None, None, started, attempt + 1, f"{label} request failed")
                 if attempt < len(delays):
                     self._wait(delays[attempt])
                     continue
-                raise RetryExhausted(f"token endpoint {self._host(url)} unreachable") from None
-            self._log("POST", url, None, resp.status_code, started, attempt + 1, "token request")
+                raise RetryExhausted(f"{label} endpoint {self._host(url)} unreachable") from None
+            self._log(method, url, None, resp.status_code, started, attempt + 1, f"{label} request")
             if resp.status_code >= 500 and attempt < len(delays):
                 self._wait(delays[attempt])
                 continue
             return resp
-        raise RetryExhausted("token endpoint kept failing")  # pragma: no cover
+        raise RetryExhausted(f"{label} endpoint kept failing")  # pragma: no cover
 
     # ------------------------------------------------------------------ internals
+    def _tls_verify(self) -> Any:
+        """Trust the public CAs plus the connector's own CA file. Verification stays on."""
+        if not self.cfg.source.ca_file:
+            return True
+        path = safe_file_path(self.cfg.source.ca_file)
+        context = ssl.create_default_context()
+        try:
+            context.load_verify_locations(cafile=str(path))
+        except ssl.SSLError as e:
+            raise SecurityError(f"ca_file {path.name} is not a valid certificate file") from e
+        return context
+
     def _check_auth_failure(self, resp: httpx.Response, url: str) -> None:
         """Raise when the config's header says the login was rejected, whatever the status."""
         rule = self.cfg.auth_failure
@@ -196,7 +227,7 @@ class HttpClient:
         if rule and rule.contains.lower() in value.lower():
             raise AuthFailed(f"HTTP {resp.status_code} from {self._host(url)}: credentials rejected ({rule.header}: {mask(value)})")
 
-    def _send(self, method, url, params, json_body, headers) -> httpx.Response:
+    def _send(self, method, url, params, json_body, headers, credentials) -> httpx.Response:
         max_bytes = int(self.cfg.limits.max_response_mb * 1024 * 1024)
         if params:  # httpx would replace the URL's own query string. Merge explicitly.
             url = str(httpx.URL(url).copy_merge_params(params))
@@ -205,7 +236,8 @@ class HttpClient:
             check_url(current, self.cfg, self.resolver)
             hop_headers = dict(headers)
             if self._host(current) != first_host:  # never leak credentials to another host
-                hop_headers.pop("Authorization", None)
+                for name in credentials:
+                    hop_headers.pop(name, None)
             req = self._client.build_request(
                 method, current, json=json_body if method == "POST" else None, headers=hop_headers,
             )

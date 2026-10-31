@@ -20,12 +20,12 @@ from typing import Any, Callable, Optional, Union
 from . import faults
 from .auth import make_auth
 from .config import Config, ConfigError, config_hash, load_config, validate_config
-from .errors import AuthFailed, EngineError, MappingError, SecretMissing
+from .errors import AuthFailed, EngineError, HttpError, MappingError, SecretMissing
 from .http import HttpClient, RunStats
 from .mapper import map_record, to_utc, unmapped_fields
 from .memstore import default_store, now_iso
 from .paginate import make_paginator
-from .parse import BadLine, extract_records, get_path, parse_body
+from .parse import BadLine, extract_records, get_path, parse_body, set_path
 from .secrets import mask, mask_obj
 from .security import safe_file_path
 
@@ -314,7 +314,8 @@ def _http_pages(cfg: Config, http: HttpClient, watermark, resume, limit_pages):
     if cfg.incremental and watermark:
         value = cfg.incremental.template.format(checkpoint=watermark)
         if cfg.incremental.param_in == "body":
-            base["body"] = {**(base["body"] or {}), cfg.incremental.param: value}
+            base["body"] = dict(base["body"] or {})
+            set_path(base["body"], cfg.incremental.param, value)
         else:
             base["params"][cfg.incremental.param] = value
     req = resume or paginator.first(base)
@@ -327,11 +328,20 @@ def _http_pages(cfg: Config, http: HttpClient, watermark, resume, limit_pages):
         seen.add(key)
         resp = http.request(cfg.request.method, req["url"], params=req.get("params"), json_body=req.get("body"))
         parsed = parse_body(resp.content, cfg.request.format)
+        _raise_reported_error(cfg, parsed)
         records = extract_records(parsed, cfg.request.records_path, cfg.request.format)
         nxt = paginator.next(req, resp, parsed, records)
         pages += 1
         yield {"records": records, "next": nxt}
         req = nxt
+
+
+def _raise_reported_error(cfg: Config, parsed: Any) -> None:
+    """GraphQL and similar APIs answer 200 and put the failure in the body."""
+    path = cfg.request.error_path
+    found = get_path(parsed, path) if path else None
+    if found not in (None, "", [], {}):
+        raise HttpError(f"API reported an error at '{path}': {mask(json.dumps(found, default=str))[:300]}")
 
 
 def _file_pages(cfg: Config):
