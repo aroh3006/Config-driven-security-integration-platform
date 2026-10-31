@@ -1035,3 +1035,45 @@ td.raw pre { max-height: 180px; overflow-y: auto; }
 .subnav { display: flex; flex-wrap: wrap; gap: 8px; }
 .config-card { text-decoration: none; color: var(--text); }
 .config-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+
+/* Page turn from the landing screen to the workspace.
+   Scrolling drives it, with no script. The landing stays pinned and turns away.
+   The workspace is moved up by exactly the distance scrolled, so it appears in
+   place and does not slide. Browsers without scroll timelines, reduced motion and
+   small windows skip all of this and get a plain scroll. */
+
+.flip-runway { display: none; }
+
+@supports (animation-timeline: scroll()) {
+  @media (prefers-reduced-motion: no-preference) and (min-width: 1191px) and (min-height: 700px) {
+    .landing {
+      position: fixed;
+      inset: 0;
+      z-index: 5;
+      transform-origin: left center;
+      animation: page-turn linear both;
+      animation-timeline: scroll(root);
+      animation-range: 0 120vh;
+    }
+    .flip-runway { display: block; height: 120vh; }
+    .flip-runway ~ .shell {
+      animation: page-arrive linear both;
+      animation-timeline: scroll(root);
+      animation-range: 0 120vh;
+    }
+  }
+}
+
+/* The landing is fully gone by 50% and the workspace only starts at 55%, so the
+   two pages are never readable on top of each other. */
+@keyframes page-turn {
+  from { transform: perspective(1800px) rotateY(0deg); opacity: 1; visibility: visible; }
+  50% { transform: perspective(1800px) rotateY(-55deg); opacity: 0; visibility: visible; }
+  51%, to { transform: perspective(1800px) rotateY(-55deg); opacity: 0; visibility: hidden; }
+}
+
+@keyframes page-arrive {
+  from { transform: translateY(-120vh) scale(0.97); opacity: 0; }
+  55% { opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}

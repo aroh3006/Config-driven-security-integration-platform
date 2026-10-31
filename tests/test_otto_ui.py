@@ -426,3 +426,15 @@ def test_new_pages_load(client):
     db.add_quarantine("demo", None, {"x": "<b>raw</b>"}, "missing id")
     page = client.get("/ui/quarantine").text
     assert "missing id" in page and "<b>raw</b>" not in page
+
+
+def test_page_turn_is_css_only_and_can_be_skipped():
+    assert "animation-timeline: scroll(root)" in CSS
+    assert "@supports (animation-timeline: scroll())" in CSS
+    assert "prefers-reduced-motion: no-preference" in CSS
+
+
+def test_page_turn_runway_is_only_on_home(client):
+    add(client, "demo")
+    assert 'class="flip-runway"' in client.get("/").text
+    assert 'class="flip-runway"' not in client.get("/ui/health").text
