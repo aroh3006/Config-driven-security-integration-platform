@@ -256,7 +256,7 @@ pre {
 .head-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; min-width: 0; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 
-@media (max-width: 1240px) {
+@media (max-width: 1360px) {
   .split { grid-template-columns: minmax(0, 1fr); }
 }
 
@@ -497,7 +497,7 @@ td.err { min-width: 180px; color: var(--muted); font-size: 12.5px; }
 .patch {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(170px, 230px) minmax(48px, 1fr) minmax(170px, 230px) minmax(48px, 1fr) minmax(120px, 170px);
+  grid-template-columns: minmax(140px, 1.5fr) minmax(112px, 0.9fr) minmax(140px, 1.3fr) minmax(32px, 0.4fr) minmax(92px, 1fr);
   align-items: stretch;
 }
 
@@ -560,10 +560,10 @@ td.err { min-width: 180px; color: var(--muted); font-size: 12.5px; }
   position: absolute;
   left: 50%;
   transform: translate(-50%, -50%);
-  padding: 3px 10px;
+  padding: 3px 8px;
   border: 1px solid;
   border-radius: 999px;
-  font: 400 11.5px var(--mono);
+  font: 400 11px var(--mono);
   white-space: nowrap;
   z-index: 1;
 }

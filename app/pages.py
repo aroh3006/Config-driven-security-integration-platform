@@ -7,6 +7,7 @@ with the network off during the failure demo.
 from __future__ import annotations
 
 import json
+import threading
 from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import quote
@@ -16,7 +17,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
-from app import connectors, engine_client as engine, formbuilder, health, patch, sidebar, theme
+from app import connectors, engine_client as engine, formbuilder, health, live, patch, scenarios, sidebar, theme
 from store import db
 
 ACTOR = "web"
@@ -35,6 +36,11 @@ HOME_ENGINE = {
     "note": "",
     "chips": ("login", "paging", "retries", "rate limits", "mapping", "secrets"),
 }
+
+
+def _spawn(target: Callable[[], None]) -> None:
+    """Start a long run on its own thread. A closed browser tab cannot cancel it."""
+    threading.Thread(target=target, daemon=True).start()
 
 
 def _render(
@@ -113,9 +119,84 @@ def build_router(
             healthy=sum(1 for row in rows if row["status"] == "healthy"),
         )
 
+    def tracked_run(name: str) -> None:
+        """Run a connector and always mark it finished. Unused faults are cleared."""
+        try:
+            run_and_alert(name)
+        finally:
+            engine.clear_fault(name)
+            live.finish(name)
+
     @router.get("/ui/live")
     def live_entry() -> Response:
-        return RedirectResponse("/ui/demo", status_code=303)
+        """Open the connector most worth watching."""
+        rows = health.health_rows()
+        if not rows:
+            return _redirect("/ui/add", "Add a source first")
+        worst = patch.choose(rows, 1)[0]["name"]
+        return RedirectResponse(f"/ui/live/{quote(worst)}", status_code=303)
+
+    @router.get("/ui/live/{name}", response_class=HTMLResponse)
+    def live_page(request: Request, name: str) -> HTMLResponse:
+        connector = db.get_connector(name)
+        if connector is None:
+            raise HTTPException(404, f"unknown connector {name!r}")
+        rows = health.health_rows()
+        row = next(item for item in rows if item["name"] == name)
+        state = live.snapshot(name)
+        view = scenarios.build(name, connector, rows, state)
+        shown = [dict(item) for item in rows]
+        if state["waiting"]:
+            next(item for item in shown if item["name"] == name)["status"] = "waiting"
+        elif state["active"]:
+            next(item for item in shown if item["name"] == name)["status"] = "running"
+        tray = None
+        if view["kind"] == "bad_record":
+            tray = {"href": "/ui/quarantine", "count": view["quarantine_total"]}
+        return _render(
+            request,
+            "live.html",
+            nav="live",
+            current=name,
+            connector=connector,
+            row=row,
+            view=view,
+            scenarios=scenarios.SCENARIOS,
+            refresh=state["active"] or (row["running"] and row["recent"]),
+            p=patch.build(shown, limit=4, focus=name, tag=view["status"]["tag"], show_slot=False),
+            engine={
+                "eyebrow": "Engine",
+                "title": view["status"]["engine"][0],
+                "note": view["status"]["engine"][1],
+                "chips": (),
+                "tray": tray,
+            },
+        )
+
+    @router.post("/ui/live/{name}/scenario")
+    async def start_scenario(request: Request, name: str) -> Response:
+        """Set the fault for one named scenario, then run in the background."""
+        connector = db.get_connector(name)
+        if connector is None:
+            raise HTTPException(404, f"unknown connector {name!r}")
+        key = str((await request.form()).get("scenario"))
+        scenario = scenarios.SCENARIOS.get(key)
+        if scenario is None:
+            raise HTTPException(400, f"unknown scenario {key!r}")
+        back = f"/ui/live/{quote(name)}"
+        if connector["status"] == "paused":
+            return _redirect(back, f"{name} is paused. Resume it to run a scenario.")
+        if connector["approved_hash"] != connector["config_hash"]:
+            return _redirect(back, f"{name} has a changed config. Approve it to run a scenario.")
+        if not live.begin(name, key):
+            return _redirect(back, f"{name} is already running. Wait for it to finish.")
+        if scenario["mode"] == "off":
+            engine.clear_fault(name)
+        else:
+            engine.set_fault(name, scenario["mode"])
+        db.audit(ACTOR, "scenario.start", name, key)
+        _spawn(lambda: tracked_run(name))
+        return RedirectResponse(back, status_code=303)
 
     @router.get("/ui/configs", response_class=HTMLResponse)
     def configs_page(request: Request) -> HTMLResponse:
@@ -139,8 +220,11 @@ def build_router(
         if action == "test":
             return connector_page(request, name, test=_test_view(engine.test_connection(name)))
         if action == "run":
-            background.add_task(run_and_alert, name)
-            message = f"{name}: run started"
+            if live.begin(name):
+                background.add_task(tracked_run, name)
+                message = f"{name}: run started"
+            else:
+                message = f"{name}: already running"
         elif action == "pause":
             engine.pause(name)
             db.audit(ACTOR, "connector.pause", name)

@@ -9,7 +9,7 @@ from typing import Any
 import typer
 import uvicorn
 
-from app import connectors, engine_client as engine, health, notify
+from app import connectors, engine_client as engine, health, notify, runlog
 from store import db
 
 ACTOR = "cli"
@@ -23,6 +23,7 @@ cli.add_typer(quarantine_cli, name="quarantine")
 @cli.callback()
 def setup() -> None:
     db.init_db()
+    runlog.install()
 
 
 def _require_connector(name: str) -> None:

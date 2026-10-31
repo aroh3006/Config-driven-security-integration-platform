@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% from "_icons.html" import status %}
+{% block head %}{% if refresh %}<meta http-equiv="refresh" content="5">{% endif %}{% endblock %}
+{% block title %}Live · {{ connector.name }}{% endblock %}
+{% block content %}
+<div class="head">
+  <div class="head-title">
+    <h1>{{ connector.name }}</h1>
+    {{ status(row.status) }}
+    {% if row.mock %}<span class="badge mock">mock</span>{% endif %}
+  </div>
+  <div class="actions">
+    <a class="pill on" href="/ui/live/{{ connector.name|urlencode }}" aria-current="page">Show request</a>
+    {% block view_links %}{% endblock %}
+    <a class="pill" href="/ui/connector/{{ connector.name|urlencode }}">Connector</a>
+    <a class="pill" href="/ui/demo">Demo controls</a>
+  </div>
+</div>
+
+<div class="pills" role="group" aria-label="Scenario">
+  {% for key, item in scenarios.items() %}
+  <form class="inline" method="post" action="/ui/live/{{ connector.name|urlencode }}/scenario">
+    <input type="hidden" name="scenario" value="{{ key }}">
+    <button class="pill{% if view.pill == key %} on {{ item.tone }}{% endif %}"{% if view.pill == key %} aria-pressed="true"{% endif %}>{{ item.label }}</button>
+  </form>
+  {% endfor %}
+</div>
+
+<div class="split">
+  <section class="card" aria-label="Live patch panel">
+    <div class="label-row"><span class="label">[ Live patch panel ]</span><span class="label">{{ view.panel_label }}</span></div>
+    {% include "_patch.html" %}
+
+    <div class="stack" style="gap: 8px">
+      <span class="label">{{ view.heading }}</span>
+      <div class="req-rows">
+        {% for r in view.request_rows %}
+        <div class="req {{ r.tone }}"><code>{{ r.code }}</code><span class="tag">{{ r.tag }}</span></div>
+        {% endfor %}
+      </div>
+      {% if view.dropped %}<p class="muted">{{ view.dropped }} older log entries were not kept.</p>{% endif %}
+    </div>
+
+    <div class="caption">
+      <h2>{{ view.status.caption[0] }}</h2>
+      <p class="note">{{ view.status.caption[1] }}</p>
+      <div class="chips">{% for chip in view.status.caption[2] %}<span>{{ chip }}</span>{% endfor %}</div>
+    </div>
+  </section>
+
+  <div class="stack">
+    <section class="card" aria-label="Status">
+      <span class="label">[ Status ]</span>
+      <span class="big-status t-{{ view.status.tone }}">{{ view.status.title }}</span>
+      <span class="mono-line">{{ view.status.line }}</span>
+      <span class="note">{{ view.status.detail }}</span>
+      {% if view.injected %}<span class="muted">This run used an injected fault from the scenario switch.</span>{% endif %}
+      {% if view.kind == "bad_record" %}
+      <div class="actions"><a class="btn primary" href="/ui/quarantine">Replay in quarantine</a><a class="btn" href="/ui/connector/{{ connector.name|urlencode }}">Open connector</a></div>
+      {% endif %}
+    </section>
+
+    <section class="card" aria-label="What Otto did">
+      <span class="label">[ What Otto did · UTC ]</span>
+      {% if view.timeline %}
+      <ol class="timeline">
+        {% for line in view.timeline %}
+        <li><time>{{ line.at }}</time><span{% if line.tone %} class="t-{{ line.tone }}"{% endif %}>{{ line.text }}</span></li>
+        {% endfor %}
+      </ol>
+      {% else %}<p class="note">No request log for the last run yet.</p>{% endif %}
+    </section>
+
+    {% if view.alert %}
+    <section class="card" aria-label="Alert">
+      <span class="label">[ Alert ]</span>
+      <span class="note">{{ view.alert.state }}</span>
+      <pre>{{ view.alert.message }}</pre>
+    </section>
+    {% elif view.kind == "bad_record" %}
+    <section class="card" aria-label="Quarantine">
+      <span class="label">[ Quarantine · {{ view.quarantine_total }} ]</span>
+      {% for item in view.quarantine %}
+      <div class="q-item"><code>record {{ item.id }}</code><span>{{ item.reason }}</span></div>
+      {% endfor %}
+      <span class="muted">Each keeps its raw record. A replay uses the original data.</span>
+    </section>
+    {% else %}
+    <section class="card" aria-label="Connection readings">
+      <span class="label">[ Connections · now ]</span>
+      {% for peer in view.peers %}
+      <div class="reading"><a href="/ui/live/{{ peer.name|urlencode }}">{{ peer.name }}</a>{{ status(peer.status) }}</div>
+      {% else %}<p class="note">No other sources yet.</p>{% endfor %}
+    </section>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

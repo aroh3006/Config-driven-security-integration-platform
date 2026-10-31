@@ -45,6 +45,7 @@
       <td class="err">{{ row.last_error or "" }}</td>
       <td>{{ row.next_run }}</td>
       <td><div class="cell-actions">
+        <a class="btn" href="/ui/live/{{ row.name|urlencode }}" aria-label="Open {{ row.name }} live">Live</a>
         <form class="inline" method="post" action="/ui/connector/{{ row.name|urlencode }}/test"><button aria-label="Test {{ row.name }}">Test</button></form>
         <form class="inline" method="post" action="/ui/connector/{{ row.name|urlencode }}/run"><button aria-label="Run {{ row.name }} now">Run now</button></form>
         {% if row.enabled %}

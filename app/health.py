@@ -13,6 +13,7 @@ from store import db
 SCHEDULE_RE = re.compile(r"^every\s+(\d+)\s*([smh])$")
 UNIT_SECONDS = {"s": 1, "m": 60, "h": 3600}
 ENTITY_LABELS = {"user": "users", "device": "devices", "alert": "alerts"}
+RECENT_RUN_S = 600
 AUTH_LABELS = {
     "none": "No login",
     "api_key": "API key",
@@ -105,6 +106,7 @@ def connector_row(connector: dict[str, Any], now: datetime | None = None) -> dic
         "status": connector["status"],
         "consecutive_failures": connector["consecutive_failures"],
         "running": bool(run and run["status"] == "running"),
+        "recent": bool(last_time and (now - last_time).total_seconds() < RECENT_RUN_S),
         "last_run": last_ago,
         "last_run_at": last_time.strftime("%Y-%m-%dT%H:%M:%SZ") if last_time else None,
         "records_pulled": run["records_pulled"] if run else 0,
