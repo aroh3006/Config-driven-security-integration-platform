@@ -130,3 +130,28 @@ def test_ndjson_and_csv_formats(runner, store):
     text = cfg("{type: none}", "").replace("request: {path: /items,", "request: {format: ndjson, path: /items,")
     r = runner(text, nd)
     assert r.records_pulled == 4 and r.records_bad == 1 and "line 4" in store.quarantine[0]["reason"]
+
+
+INCREMENTAL = "incremental: {field: ts, param: since, template: '{checkpoint}', start: '2026-10-01T00:00:00Z'}"
+
+
+def test_link_header_stops_on_empty_page_and_advances_watermark(runner, store):
+    calls = []
+
+    def h(req):
+        calls.append(req.url)
+        page = int(req.url.params.get("p", 0))
+        link = f'<https://api.example.com/items?p={page + 1}>; rel="next"'  # always present, even on the empty page
+        return httpx.Response(200, json=ITEMS[:3] if page == 0 else [], headers={"Link": link})
+
+    r = runner(cfg("{type: link_header}", "", INCREMENTAL), h)
+    assert r.status == "success" and r.records_pulled == 3 and r.pages == 2 and len(calls) == 2
+    checkpoint = store.get_checkpoint("src")
+    assert checkpoint["watermark"] == "2026-10-31T00:02:00Z" and checkpoint["resume_state"] is None
+
+
+def test_link_header_poll_with_no_new_records_keeps_watermark(runner, store):
+    link = '<https://api.example.com/items?p=1>; rel="next"'
+    r = runner(cfg("{type: link_header}", "", INCREMENTAL), lambda req: httpx.Response(200, json=[], headers={"Link": link}))
+    assert r.status == "success" and r.pages == 1
+    assert store.get_checkpoint("src")["watermark"] == "2026-10-01T00:00:00Z"

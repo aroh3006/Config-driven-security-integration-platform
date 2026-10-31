@@ -216,7 +216,10 @@ class HttpClient:
                     chunks.append(chunk)
             finally:
                 resp.close()
-            return httpx.Response(resp.status_code, headers=resp.headers, content=b"".join(chunks), request=req)
+            # iter_bytes() already decoded the body. Drop the encoding header or httpx decodes it again.
+            headers = httpx.Headers(resp.headers)
+            headers.pop("content-encoding", None)
+            return httpx.Response(resp.status_code, headers=headers, content=b"".join(chunks), request=req)
         raise SecurityError("blocked: too many redirects")
 
     def _fake_response(self, fault: faults.Fault, method: str, url: str) -> httpx.Response:

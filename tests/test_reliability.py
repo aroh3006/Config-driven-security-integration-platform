@@ -1,5 +1,8 @@
 """Failure tests: retries 1/2/4 (FR-7), 429 + Retry-After (FR-8), wrong key, network off, OAuth refresh."""
 
+import gzip
+import json
+
 import httpx
 
 from engine import faults, run_connector, save_and_approve
@@ -190,3 +193,48 @@ def test_hook_called_with_failure_count(runner):
     finally:
         on_run_finished.clear()
     assert seen == [("auth_failed", 1)]
+
+
+FEED = """
+name: feed
+entity: alert
+source: {base_url: https://feed.example.com, allow_hosts: [feed.example.com]}
+request: {path: /feed.json, records_path: vulnerabilities}
+pagination: {type: link_header}
+limits: {max_response_mb: 1}
+map:
+  id: cveID
+  timestamp: { path: dateAdded, transform: to_utc }
+"""
+
+VULNS = [{"cveID": "CVE-2021-44228", "dateAdded": "2021-12-10"}, {"cveID": "CVE-2023-4966", "dateAdded": "2023-10-18"}]
+
+
+def gzip_response(data, headers=()):
+    """An unread gzip stream, the way a real server's response reaches the client."""
+    body = gzip.compress(json.dumps(data).encode())
+    return httpx.Response(200, headers=[(b"Content-Encoding", b"gzip"), *headers], stream=httpx.ByteStream(body))
+
+
+def test_gzip_response_is_decoded_once(runner, store):
+    r = runner(FEED, lambda req: gzip_response({"vulnerabilities": VULNS}))
+    assert r.status == "success" and r.records_pulled == 2 and r.records_bad == 0
+    assert len(store.tables["alerts"]) == 2
+
+
+def test_gzip_keeps_link_paging_and_non_ascii_headers(runner):
+    def h(req):
+        page = int(req.url.params.get("p", 0))
+        headers = [(b"Server", "café".encode("latin-1"))]
+        if page == 0:
+            headers += [(b"Link", b'<https://feed.example.com/feed.json?p=1>; rel="next"'),
+                        (b"Link", b'<https://feed.example.com/feed.json?p=0>; rel="first"')]
+        return gzip_response({"vulnerabilities": VULNS[page:page + 1]}, headers)
+
+    r = runner(FEED, h)
+    assert r.status == "success" and r.records_pulled == 2 and r.pages == 2
+
+
+def test_size_limit_applies_to_decompressed_gzip_body(runner):
+    r = runner(FEED, lambda req: gzip_response({"vulnerabilities": [], "pad": "a" * (2 * 1024 * 1024)}))
+    assert r.status == "failed" and "MB limit" in r.last_error

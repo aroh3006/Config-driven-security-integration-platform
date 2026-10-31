@@ -68,9 +68,14 @@ class NoPaginator(Paginator):
 
 @register("link_header")
 class LinkHeaderPaginator(Paginator):
-    """Follow the RFC 8288 Link header rel="next" until it is absent (Okta, GitHub)."""
+    """Follow the RFC 8288 Link header rel="next" until it is absent or a page is empty.
+
+    Polling APIs send a next link on every response. For those an empty page is the end.
+    """
 
     def next(self, current, resp, parsed, records):
+        if not records:
+            return None
         nxt = resp.links.get("next", {}).get("url")
         if not nxt:
             return None
