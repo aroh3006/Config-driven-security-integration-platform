@@ -676,21 +676,6 @@ td.raw pre { max-height: 180px; overflow-y: auto; }
   container-type: inline-size;
 }
 
-.hero-word {
-  position: absolute;
-  left: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--word);
-  font-size: 22cqw;
-  font-weight: 800;
-  letter-spacing: -0.04em;
-  line-height: 1;
-  white-space: nowrap;
-  pointer-events: none;
-  user-select: none;
-}
-
 .patch {
   position: relative;
   display: grid;

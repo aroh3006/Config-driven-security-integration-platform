@@ -215,7 +215,7 @@ def test_output_totals_add_up():
 def test_home_page_draws_the_panel(client):
     add(client, "demo")
     page = client.get("/ui/health").text
-    assert "CONNECT" in page and "<svg" in page
+    assert "CONNECT" not in page and "<svg" in page
     assert "Plug in a new source" in page
     assert 'http-equiv="refresh" content="10"' in page
 
