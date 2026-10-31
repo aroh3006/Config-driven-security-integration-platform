@@ -262,6 +262,10 @@ def build_router(
             return _redirect(back, f"{name} is paused. Resume it to run a scenario.")
         if connector["approved_hash"] != connector["config_hash"]:
             return _redirect(back, f"{name} has a changed config. Approve it to run a scenario.")
+        missing = engine.missing_secrets(connector["config_yaml"])
+        if missing:
+            needed = ", ".join(missing)
+            return _redirect(back, f"Nothing ran. {name} needs {needed} in .env. Add it, then restart Otto.")
         if not live.begin(name, key):
             return _redirect(back, f"{name} is already running. Wait for it to finish.")
         if scenario["mode"] == "off":

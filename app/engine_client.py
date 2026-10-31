@@ -102,6 +102,18 @@ def to_dict(result: Any) -> dict[str, Any]:
     return result.model_dump()
 
 
+def missing_secrets(yaml_text: str) -> list[str]:
+    """Return the environment variables this config needs that have no value."""
+    from engine.errors import ConfigError
+    from engine.secrets import env_name, has_secret
+
+    try:
+        names = load_config(yaml_text).secret_names()
+    except ConfigError:
+        return []
+    return [env_name(name) for name in names if not has_secret(name)]
+
+
 def stubbed_functions() -> list[str]:
     """Return the engine functions that are still fake."""
     return list(_stubbed)

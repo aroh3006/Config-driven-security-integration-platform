@@ -300,9 +300,28 @@ def test_rejected_login_behind_a_200_is_explained(client, monkeypatch):
     assert "wrong-value-123" not in page
 
 
-def test_missing_secret_does_not_claim_a_401(client, monkeypatch):
-    monkeypatch.delenv("MOCK_JIRA_EMAIL")
-    page = press(client, "mock-jira-tickets", "wrong_key").text
+@pytest.mark.parametrize("scenario", sorted(scenarios.SCENARIOS))
+def test_scenario_refused_when_a_secret_is_missing(client, monkeypatch, scenario):
+    monkeypatch.setenv("MOCK_JIRA_EMAIL", "")
+    monkeypatch.setenv("MOCK_JIRA_TOKEN", "")
+    page = press(client, "mock-jira-tickets", scenario).text
+    assert "Nothing ran. mock-jira-tickets needs MOCK_JIRA_EMAIL, MOCK_JIRA_TOKEN in .env." in page
+    assert db.last_run("mock-jira-tickets") is None
+    assert faults.list_faults() == {}
+    assert live.snapshot("mock-jira-tickets")["active"] is False
+
+
+def test_scenario_names_only_the_secret_that_is_missing(client, monkeypatch):
+    monkeypatch.setenv("MOCK_JIRA_EMAIL", "")
+    page = press(client, "mock-jira-tickets", "healthy").text
+    assert "needs MOCK_JIRA_EMAIL in .env" in page
+    assert saas.JIRA_TOKEN not in page
+
+
+def test_missing_secret_does_not_claim_a_401(client, wired, monkeypatch):
+    monkeypatch.setenv("MOCK_JIRA_EMAIL", "")
+    wired("mock-jira-tickets")
+    page = client.get("/ui/live/mock-jira-tickets").text
     assert "Failed: secret missing" in page
     assert "no request sent" in page and "401" not in page
     assert "Failed: login rejected" not in page and "a wrong key" not in page.lower()
