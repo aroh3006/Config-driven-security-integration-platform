@@ -21,7 +21,8 @@
   <li><code>503x3</code>: three failures, retries at 1s, 2s and 4s, then success.</li>
   <li><code>503x4</code>: one failure too many. The run is marked failed.</li>
   <li><code>429:30</code>: rate limited, waits 30 seconds and carries on.</li>
-  <li><code>timeout</code>: requests time out, retries run out and the run fails.</li>
+  <li><code>timeoutx4</code>: requests time out, retries run out and the run fails.</li>
+  <li><code>401</code>: the key is rejected with no retry, so health shows auth_failed.</li>
   <li><code>badrecord</code>: one bad record goes to quarantine and the run continues.</li>
 </ul>
 {% endblock %}

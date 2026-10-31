@@ -1,0 +1,97 @@
+{
+ "resultsPerPage": 3,
+ "startIndex": 0,
+ "totalResults": 7,
+ "format": "NVD_CVE",
+ "version": "2.0",
+ "timestamp": "2026-10-31T06:00:00.000",
+ "vulnerabilities": [
+  {
+   "cve": {
+    "id": "CVE-2024-3400",
+    "sourceIdentifier": "psirt@paloaltonetworks.com",
+    "published": "2024-04-12T08:15:06.230",
+    "lastModified": "2024-04-19T01:00:00.000",
+    "vulnStatus": "Analyzed",
+    "descriptions": [
+     {
+      "lang": "en",
+      "value": "A command injection vulnerability (CVE-2024-3400) allows an unauthenticated attacker to execute arbitrary code."
+     }
+    ],
+    "metrics": {
+     "cvssMetricV31": [
+      {
+       "source": "nvd@nist.gov",
+       "type": "Primary",
+       "cvssData": {
+        "version": "3.1",
+        "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H",
+        "baseScore": 10.0,
+        "baseSeverity": "CRITICAL"
+       }
+      }
+     ]
+    }
+   }
+  },
+  {
+   "cve": {
+    "id": "CVE-2023-4966",
+    "sourceIdentifier": "psirt@paloaltonetworks.com",
+    "published": "2024-04-12T08:15:06.230",
+    "lastModified": "2024-04-19T01:00:00.000",
+    "vulnStatus": "Analyzed",
+    "descriptions": [
+     {
+      "lang": "en",
+      "value": "A command injection vulnerability (CVE-2023-4966) allows an unauthenticated attacker to execute arbitrary code."
+     }
+    ],
+    "metrics": {
+     "cvssMetricV31": [
+      {
+       "source": "nvd@nist.gov",
+       "type": "Primary",
+       "cvssData": {
+        "version": "3.1",
+        "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H",
+        "baseScore": 9.4,
+        "baseSeverity": "CRITICAL"
+       }
+      }
+     ]
+    }
+   }
+  },
+  {
+   "cve": {
+    "id": "CVE-2024-21762",
+    "sourceIdentifier": "psirt@paloaltonetworks.com",
+    "published": "2024-04-12T08:15:06.230",
+    "lastModified": "2024-04-19T01:00:00.000",
+    "vulnStatus": "Analyzed",
+    "descriptions": [
+     {
+      "lang": "en",
+      "value": "A command injection vulnerability (CVE-2024-21762) allows an unauthenticated attacker to execute arbitrary code."
+     }
+    ],
+    "metrics": {
+     "cvssMetricV31": [
+      {
+       "source": "nvd@nist.gov",
+       "type": "Primary",
+       "cvssData": {
+        "version": "3.1",
+        "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H",
+        "baseScore": 9.8,
+        "baseSeverity": "CRITICAL"
+       }
+      }
+     ]
+    }
+   }
+  }
+ ]
+}

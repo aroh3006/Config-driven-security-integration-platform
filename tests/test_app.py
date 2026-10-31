@@ -24,6 +24,7 @@ map: { id: id }
 notify: { slack_after_failures: 2 }
 """
 REPO_CONFIGS = Path(__file__).resolve().parent.parent / "configs"
+pytestmark = pytest.mark.usefixtures("isolated_app")
 
 
 @pytest.fixture
@@ -445,7 +446,7 @@ def test_kev_page(client):
 
 
 def test_demo_page_sets_and_clears_fault(client, demo):
-    client.post("/ui/demo", data={"connector": demo, "mode": "timeout"})
+    client.post("/ui/demo", data={"connector": demo, "mode": "timeoutx4"})
     assert client.post(f"/connectors/{demo}/run").json()["status"] == "failed"
     client.post("/ui/demo", data={"connector": demo, "mode": "off"})
     assert client.post(f"/connectors/{demo}/run").json()["status"] == "success"

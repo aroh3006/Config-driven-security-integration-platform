@@ -21,7 +21,7 @@ from store import db
 
 ACTOR = "web"
 KEV_SOURCE = "cisa-kev"
-FAULT_MODES = ("503x3", "503x4", "429:30", "timeout", "badrecord")
+FAULT_MODES = ("503x3", "503x4", "429:30", "timeoutx4", "401", "badrecord")
 AUTH_TYPES = ("none", "api_key", "basic", "bearer", "oauth2_client_credentials")
 PAGING_TYPES = ("none", "link_header", "page_number", "offset", "body_token", "body_next_url")
 ENTITY_PAGES = {"users": "user", "devices": "device", "alerts": "alert"}
@@ -167,14 +167,16 @@ def build_router(
                 return add_page(request, form, sample=sample, problems=problems)
 
         text = form["yaml"]
-        problems = engine.validate_config(text)
+        checked = engine.validate_config(text)
+        problems = connectors.errors_only(checked)
+        warnings = connectors.warnings_only(checked)
         if problems:
-            return add_page(request, form, sample=sample, problems=problems)
+            return add_page(request, form, sample=sample, problems=problems, warnings=warnings)
         if action == "validate":
-            return add_page(request, form, sample=sample, valid=True)
+            return add_page(request, form, sample=sample, valid=True, warnings=warnings)
         if action == "test":
             result = engine.test_connection(engine.load_config(text))
-            return add_page(request, form, sample=sample, test=_test_view(result))
+            return add_page(request, form, sample=sample, test=_test_view(result), warnings=warnings)
         if action == "save":
             problems = connectors.save_and_approve(text, ACTOR)
             if problems:

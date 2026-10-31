@@ -1,0 +1,158 @@
+[
+ {
+  "uuid": "a1b2c3d4-0000-0000-0000-000000000000",
+  "published": "2026-10-31T00:15:00.123Z",
+  "eventType": "user.session.start",
+  "version": "0",
+  "severity": "INFO",
+  "legacyEventType": "core.user_auth.login_success",
+  "displayMessage": "User login to Okta",
+  "actor": {
+   "id": "00u1abcd",
+   "type": "User",
+   "alternateId": "user1@example.com",
+   "displayName": "Ann Rao"
+  },
+  "client": {
+   "ipAddress": "198.51.100.10",
+   "userAgent": {
+    "rawUserAgent": "Mozilla/5.0"
+   }
+  },
+  "outcome": {
+   "result": "FAILURE",
+   "reason": null
+  },
+  "target": []
+ },
+ {
+  "uuid": "a1b2c3d4-0000-0000-0000-000000000001",
+  "published": "2026-10-31T01:15:01.123Z",
+  "eventType": "user.session.start",
+  "version": "0",
+  "severity": "INFO",
+  "legacyEventType": "core.user_auth.login_success",
+  "displayMessage": "User login to Okta",
+  "actor": {
+   "id": "00u1abcd",
+   "type": "User",
+   "alternateId": "user1@example.com",
+   "displayName": "Ann Rao"
+  },
+  "client": {
+   "ipAddress": "198.51.100.11",
+   "userAgent": {
+    "rawUserAgent": "Mozilla/5.0"
+   }
+  },
+  "outcome": {
+   "result": "SUCCESS",
+   "reason": null
+  },
+  "target": []
+ },
+ {
+  "uuid": "a1b2c3d4-0000-0000-0000-000000000002",
+  "published": "2026-10-31T02:15:02.123Z",
+  "eventType": "user.session.start",
+  "version": "0",
+  "severity": "INFO",
+  "legacyEventType": "core.user_auth.login_success",
+  "displayMessage": "User login to Okta",
+  "actor": {
+   "id": "00u1abcd",
+   "type": "User",
+   "alternateId": "user1@example.com",
+   "displayName": "Ann Rao"
+  },
+  "client": {
+   "ipAddress": "198.51.100.12",
+   "userAgent": {
+    "rawUserAgent": "Mozilla/5.0"
+   }
+  },
+  "outcome": {
+   "result": "FAILURE",
+   "reason": null
+  },
+  "target": []
+ },
+ {
+  "uuid": "a1b2c3d4-0000-0000-0000-000000000003",
+  "published": "2026-10-31T03:15:03.123Z",
+  "eventType": "user.session.start",
+  "version": "0",
+  "severity": "INFO",
+  "legacyEventType": "core.user_auth.login_success",
+  "displayMessage": "User login to Okta",
+  "actor": {
+   "id": "00u1abcd",
+   "type": "User",
+   "alternateId": "user1@example.com",
+   "displayName": "Ann Rao"
+  },
+  "client": {
+   "ipAddress": "198.51.100.13",
+   "userAgent": {
+    "rawUserAgent": "Mozilla/5.0"
+   }
+  },
+  "outcome": {
+   "result": "SUCCESS",
+   "reason": null
+  },
+  "target": []
+ },
+ {
+  "uuid": "a1b2c3d4-0000-0000-0000-000000000004",
+  "published": "2026-10-31T04:15:04.123Z",
+  "eventType": "user.session.start",
+  "version": "0",
+  "severity": "INFO",
+  "legacyEventType": "core.user_auth.login_success",
+  "displayMessage": "User login to Okta",
+  "actor": {
+   "id": "00u1abcd",
+   "type": "User",
+   "alternateId": "user1@example.com",
+   "displayName": "Ann Rao"
+  },
+  "client": {
+   "ipAddress": "198.51.100.14",
+   "userAgent": {
+    "rawUserAgent": "Mozilla/5.0"
+   }
+  },
+  "outcome": {
+   "result": "FAILURE",
+   "reason": null
+  },
+  "target": []
+ },
+ {
+  "uuid": "a1b2c3d4-0000-0000-0000-000000000005",
+  "published": "2026-10-31T05:15:05.123Z",
+  "eventType": "user.session.start",
+  "version": "0",
+  "severity": "INFO",
+  "legacyEventType": "core.user_auth.login_success",
+  "displayMessage": "User login to Okta",
+  "actor": {
+   "id": "00u1abcd",
+   "type": "User",
+   "alternateId": "user1@example.com",
+   "displayName": "Ann Rao"
+  },
+  "client": {
+   "ipAddress": "198.51.100.15",
+   "userAgent": {
+    "rawUserAgent": "Mozilla/5.0"
+   }
+  },
+  "outcome": {
+   "result": "SUCCESS",
+   "reason": null
+  },
+  "target": []
+ }
+]

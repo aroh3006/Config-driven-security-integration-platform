@@ -20,7 +20,7 @@ ENTITIES = {"user", "device", "alert"}
 AUTH_TYPES = {"none", "api_key", "basic", "bearer", "oauth2_client_credentials"}
 PAGINATION_TYPES = {"none", "link_header", "page_number", "offset", "body_token", "body_next_url"}
 REQUIRED_KEYS = ("name", "entity", "source", "map")
-FAULT_MODE_RE = re.compile(r"^(503x\d+|429:\d+|timeout|badrecord)$")
+FAULT_MODE_RE = re.compile(r"^(503x\d+|429:\d+|timeout(x\d+)?|401|badrecord)$")
 
 DRAFT_YAML = """\
 name: new-source
@@ -259,9 +259,12 @@ def _resolve_config(name_or_config: str | StubConfig) -> StubConfig | None:
 
 
 def _fake_result(config: StubConfig, fault: str | None) -> RunResult:
-    if fault == "timeout" or (fault and _is_503_over_limit(fault)):
-        error = "request timed out" if fault == "timeout" else "HTTP 503 after 3 retries"
-        return RunResult(status="failed", retries=3, last_error=error)
+    if fault == "401":
+        return RunResult(status="auth_failed", last_error="HTTP 401: the key was rejected")
+    if fault and fault.startswith("timeout"):
+        return RunResult(status="failed", retries=3, last_error="request timed out")
+    if fault and _is_503_over_limit(fault):
+        return RunResult(status="failed", retries=3, last_error="HTTP 503 after 3 retries")
 
     good = 4 if fault == "badrecord" else 5
     bad = 1 if fault == "badrecord" else 0

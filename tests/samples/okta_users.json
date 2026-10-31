@@ -1,0 +1,258 @@
+[
+ {
+  "id": "00u0abcd",
+  "status": "SUSPENDED",
+  "created": "2026-01-01T10:00:00.000Z",
+  "activated": null,
+  "statusChanged": null,
+  "lastLogin": "2026-10-20T18:22:05.000Z",
+  "lastUpdated": "2026-10-29T10:00:00.000Z",
+  "passwordChanged": "2026-09-01T10:00:00.000Z",
+  "type": {
+   "id": "oty1"
+  },
+  "profile": {
+   "firstName": "Ann",
+   "lastName": "Rao",
+   "mobilePhone": null,
+   "secondEmail": null,
+   "login": "user0@example.com",
+   "email": "user0@example.com"
+  },
+  "credentials": {
+   "provider": {
+    "type": "OKTA",
+    "name": "OKTA"
+   }
+  },
+  "_links": {
+   "self": {
+    "href": "https://dev-123456.okta.com/api/v1/users/00u0abcd"
+   }
+  }
+ },
+ {
+  "id": "00u1abcd",
+  "status": "ACTIVE",
+  "created": "2026-01-02T10:00:00.000Z",
+  "activated": null,
+  "statusChanged": null,
+  "lastLogin": "2026-10-21T18:22:05.000Z",
+  "lastUpdated": "2026-10-29T10:00:00.000Z",
+  "passwordChanged": "2026-09-01T10:00:00.000Z",
+  "type": {
+   "id": "oty1"
+  },
+  "profile": {
+   "firstName": "Ravi",
+   "lastName": "Iyer",
+   "mobilePhone": null,
+   "secondEmail": null,
+   "login": "user1@example.com",
+   "email": "user1@example.com"
+  },
+  "credentials": {
+   "provider": {
+    "type": "OKTA",
+    "name": "OKTA"
+   }
+  },
+  "_links": {
+   "self": {
+    "href": "https://dev-123456.okta.com/api/v1/users/00u1abcd"
+   }
+  }
+ },
+ {
+  "id": "00u2abcd",
+  "status": "ACTIVE",
+  "created": "2026-01-03T10:00:00.000Z",
+  "activated": null,
+  "statusChanged": null,
+  "lastLogin": "2026-10-22T18:22:05.000Z",
+  "lastUpdated": "2026-10-29T10:00:00.000Z",
+  "passwordChanged": "2026-09-01T10:00:00.000Z",
+  "type": {
+   "id": "oty1"
+  },
+  "profile": {
+   "firstName": "Meera",
+   "lastName": "Shah",
+   "mobilePhone": null,
+   "secondEmail": null,
+   "login": "user2@example.com",
+   "email": "user2@example.com"
+  },
+  "credentials": {
+   "provider": {
+    "type": "OKTA",
+    "name": "OKTA"
+   }
+  },
+  "_links": {
+   "self": {
+    "href": "https://dev-123456.okta.com/api/v1/users/00u2abcd"
+   }
+  }
+ },
+ {
+  "id": "00u3abcd",
+  "status": "SUSPENDED",
+  "created": "2026-01-04T10:00:00.000Z",
+  "activated": null,
+  "statusChanged": null,
+  "lastLogin": "2026-10-23T18:22:05.000Z",
+  "lastUpdated": "2026-10-29T10:00:00.000Z",
+  "passwordChanged": "2026-09-01T10:00:00.000Z",
+  "type": {
+   "id": "oty1"
+  },
+  "profile": {
+   "firstName": "Arjun",
+   "lastName": "Nair",
+   "mobilePhone": null,
+   "secondEmail": null,
+   "login": "user3@example.com",
+   "email": "user3@example.com"
+  },
+  "credentials": {
+   "provider": {
+    "type": "OKTA",
+    "name": "OKTA"
+   }
+  },
+  "_links": {
+   "self": {
+    "href": "https://dev-123456.okta.com/api/v1/users/00u3abcd"
+   }
+  }
+ },
+ {
+  "id": "00u4abcd",
+  "status": "ACTIVE",
+  "created": "2026-01-05T10:00:00.000Z",
+  "activated": null,
+  "statusChanged": null,
+  "lastLogin": "2026-10-24T18:22:05.000Z",
+  "lastUpdated": "2026-10-29T10:00:00.000Z",
+  "passwordChanged": "2026-09-01T10:00:00.000Z",
+  "type": {
+   "id": "oty1"
+  },
+  "profile": {
+   "firstName": "Sara",
+   "lastName": "Khan",
+   "mobilePhone": null,
+   "secondEmail": null,
+   "login": "user4@example.com",
+   "email": "user4@example.com"
+  },
+  "credentials": {
+   "provider": {
+    "type": "OKTA",
+    "name": "OKTA"
+   }
+  },
+  "_links": {
+   "self": {
+    "href": "https://dev-123456.okta.com/api/v1/users/00u4abcd"
+   }
+  }
+ },
+ {
+  "id": "00u5abcd",
+  "status": "ACTIVE",
+  "created": "2026-01-06T10:00:00.000Z",
+  "activated": null,
+  "statusChanged": null,
+  "lastLogin": "2026-10-25T18:22:05.000Z",
+  "lastUpdated": "2026-10-29T10:00:00.000Z",
+  "passwordChanged": "2026-09-01T10:00:00.000Z",
+  "type": {
+   "id": "oty1"
+  },
+  "profile": {
+   "firstName": "Ann",
+   "lastName": "Rao",
+   "mobilePhone": null,
+   "secondEmail": null,
+   "login": "user5@example.com",
+   "email": "user5@example.com"
+  },
+  "credentials": {
+   "provider": {
+    "type": "OKTA",
+    "name": "OKTA"
+   }
+  },
+  "_links": {
+   "self": {
+    "href": "https://dev-123456.okta.com/api/v1/users/00u5abcd"
+   }
+  }
+ },
+ {
+  "id": "00u6abcd",
+  "status": "SUSPENDED",
+  "created": "2026-01-07T10:00:00.000Z",
+  "activated": null,
+  "statusChanged": null,
+  "lastLogin": "2026-10-26T18:22:05.000Z",
+  "lastUpdated": "2026-10-29T10:00:00.000Z",
+  "passwordChanged": "2026-09-01T10:00:00.000Z",
+  "type": {
+   "id": "oty1"
+  },
+  "profile": {
+   "firstName": "Ravi",
+   "lastName": "Iyer",
+   "mobilePhone": null,
+   "secondEmail": null,
+   "login": "user6@example.com",
+   "email": "user6@example.com"
+  },
+  "credentials": {
+   "provider": {
+    "type": "OKTA",
+    "name": "OKTA"
+   }
+  },
+  "_links": {
+   "self": {
+    "href": "https://dev-123456.okta.com/api/v1/users/00u6abcd"
+   }
+  }
+ },
+ {
+  "id": "00u7abcd",
+  "status": "ACTIVE",
+  "created": "2026-01-08T10:00:00.000Z",
+  "activated": null,
+  "statusChanged": null,
+  "lastLogin": "2026-10-27T18:22:05.000Z",
+  "lastUpdated": "2026-10-29T10:00:00.000Z",
+  "passwordChanged": "2026-09-01T10:00:00.000Z",
+  "type": {
+   "id": "oty1"
+  },
+  "profile": {
+   "firstName": "Meera",
+   "lastName": "Shah",
+   "mobilePhone": null,
+   "secondEmail": null,
+   "login": "user7@example.com",
+   "email": "user7@example.com"
+  },
+  "credentials": {
+   "provider": {
+    "type": "OKTA",
+    "name": "OKTA"
+   }
+  },
+  "_links": {
+   "self": {
+    "href": "https://dev-123456.okta.com/api/v1/users/00u7abcd"
+   }
+  }
+ }
+]

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import threading
 from contextlib import asynccontextmanager
@@ -55,8 +54,7 @@ def replay_quarantined(quarantine_id: int, actor: str) -> dict[str, Any]:
     if item is None:
         raise HTTPException(404, f"unknown quarantine id {quarantine_id}")
     connector = _require_connector(item["connector"])
-    raw = json.loads(item["raw_json"])
-    outcome = engine.replay_record(item["connector"], raw)
+    outcome = engine.replay_record(item["connector"], connectors.load_raw(item))
     if outcome["ok"]:
         db.upsert(connector["entity"], item["connector"], [outcome["row"]])
         db.mark_replayed(quarantine_id)
@@ -100,7 +98,7 @@ def create_app() -> FastAPI:
     @app.post("/connectors/validate")
     def validate(body: ConfigBody) -> dict[str, Any]:
         problems = engine.validate_config(body.yaml)
-        return {"valid": not problems, "problems": problems}
+        return {"valid": not connectors.errors_only(problems), "problems": problems}
 
     @app.post("/connectors", status_code=201)
     def create_connector(body: ConfigBody) -> Any:

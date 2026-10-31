@@ -429,15 +429,23 @@ def mark_replayed(quarantine_id: int) -> None:
 
 # Connectors
 
+def _connector_dict(row: sqlite3.Row) -> dict[str, Any]:
+    """The scheduler tests `enabled is False`, so it must be a real boolean."""
+    connector = dict(row)
+    connector["enabled"] = bool(connector["enabled"])
+    return connector
+
+
 def get_connector(name: str) -> dict[str, Any] | None:
     with _read() as conn:
         row = conn.execute("SELECT * FROM connectors WHERE name = ?", (name,)).fetchone()
-    return dict(row) if row else None
+    return _connector_dict(row) if row else None
 
 
 def list_connectors() -> list[dict[str, Any]]:
     with _read() as conn:
-        return [dict(row) for row in conn.execute("SELECT * FROM connectors ORDER BY name")]
+        rows = conn.execute("SELECT * FROM connectors ORDER BY name")
+        return [_connector_dict(row) for row in rows]
 
 
 def save_connector(name: str, entity: str, yaml: str, config_hash: str) -> None:
@@ -488,17 +496,20 @@ def approve_connector(name: str, config_hash: str) -> None:
 
 
 def set_status(name: str, status: str, consecutive_failures: int | None = None) -> None:
-    """Set connector status. consecutive_failures=None leaves the count as it is."""
+    """Set connector status. consecutive_failures=None leaves the count as it is.
+
+    `enabled` follows the status: paused means off and any other status means on.
+    """
     if status not in CONNECTOR_STATUSES:
         raise ValueError(
             f"unknown connector status {status!r}, expected one of {sorted(CONNECTOR_STATUSES)}"
         )
     with _write() as conn:
         cursor = conn.execute(
-            "UPDATE connectors SET status = ?, "
+            "UPDATE connectors SET status = ?, enabled = ?, "
             "consecutive_failures = COALESCE(?, consecutive_failures), updated_at = ? "
             "WHERE name = ?",
-            (status, consecutive_failures, now_iso(), name),
+            (status, 0 if status == "paused" else 1, consecutive_failures, now_iso(), name),
         )
         if cursor.rowcount == 0:
             raise ValueError(f"unknown connector {name!r}")

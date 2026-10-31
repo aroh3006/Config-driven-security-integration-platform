@@ -13,6 +13,7 @@ from app import connectors, engine_client as engine, health, notify
 from store import db
 
 ACTOR = "cli"
+FAILED_STATUSES = ("failed", "auth_failed", "config_changed", "paused", "skipped")
 
 cli = typer.Typer(no_args_is_help=True, add_completion=False)
 quarantine_cli = typer.Typer(no_args_is_help=True, help="List or replay quarantined records.")
@@ -49,12 +50,12 @@ def _warn_if_stubbed() -> None:
 def validate(file: Path) -> None:
     """Check a config file and print clear errors."""
     problems = engine.validate_config(file.read_text(encoding="utf-8"))
-    if not problems:
-        typer.echo(f"{file}: valid")
-        return
     for problem in problems:
-        typer.echo(f"{problem['path'] or 'config'}: {problem['message']}. {problem['hint']}")
-    raise typer.Exit(1)
+        level = problem.get("level", "error")
+        typer.echo(f"{level}: {problem['path'] or 'config'}: {problem['message']}. {problem['hint']}")
+    if connectors.errors_only(problems):
+        raise typer.Exit(1)
+    typer.echo(f"{file}: valid")
 
 
 @cli.command(name="test")
@@ -68,7 +69,7 @@ def test_command(name: str) -> None:
         typer.echo(json.dumps({k: v for k, v in row.items() if k != "raw"}, default=str))
     if result.get("unmapped_fields"):
         typer.echo(f"unmapped fields: {', '.join(result['unmapped_fields'])}")
-    if result["status"] in ("failed", "auth_failed"):
+    if result["status"] in FAILED_STATUSES:
         raise typer.Exit(1)
 
 
@@ -80,7 +81,7 @@ def run(name: str) -> None:
     result = engine.to_dict(engine.run_connector(name))
     notify.sweep()
     _print_result(result)
-    if result["status"] in ("failed", "auth_failed"):
+    if result["status"] in FAILED_STATUSES:
         raise typer.Exit(1)
 
 
@@ -162,7 +163,7 @@ def quarantine_replay(quarantine_id: int) -> None:
         typer.echo(f"Unknown quarantine id {quarantine_id}.", err=True)
         raise typer.Exit(2)
     _require_connector(item["connector"])
-    outcome = engine.replay_record(item["connector"], json.loads(item["raw_json"]))
+    outcome = engine.replay_record(item["connector"], connectors.load_raw(item))
     if outcome["ok"]:
         entity = db.get_connector(item["connector"])["entity"]
         db.upsert(entity, item["connector"], [outcome["row"]])
@@ -180,7 +181,9 @@ def onboard(sample_file: Path, entity: str = typer.Option(None, help="user, devi
     _warn_if_stubbed()
     profile = engine.profile_sample(sample_file.read_text(encoding="utf-8"), entity=entity)
     typer.echo(profile["draft_yaml"])
-    typer.echo(f"# confidence: {profile['confidence']}, paging guess: {profile['paging_guess']}")
+    confidence = profile["confidence"]
+    level = confidence.get("level") if isinstance(confidence, dict) else confidence
+    typer.echo(f"# confidence: {level}, paging guess: {profile['paging_guess']}")
 
 
 @cli.command()

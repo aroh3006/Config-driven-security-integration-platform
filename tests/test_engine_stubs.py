@@ -17,7 +17,7 @@ map: { id: id }
 
 
 @pytest.fixture(autouse=True)
-def clear_faults():
+def clear_faults(isolated_app):
     stubs._faults.clear()
     yield
     stubs._faults.clear()

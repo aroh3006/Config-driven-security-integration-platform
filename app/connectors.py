@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import re
 from pathlib import Path
@@ -24,13 +25,30 @@ def config_hash(yaml_text: str) -> str:
     return hashlib.sha256(yaml_text.encode("utf-8")).hexdigest()
 
 
+def errors_only(problems: list[dict[str, str]]) -> list[dict[str, str]]:
+    """Drop warnings such as "secret not set yet". Only errors block a config."""
+    return [p for p in problems if p.get("level", "error") == "error"]
+
+
+def warnings_only(problems: list[dict[str, str]]) -> list[dict[str, str]]:
+    return [p for p in problems if p.get("level") == "warning"]
+
+
+def load_raw(item: dict[str, Any]) -> Any:
+    """Return a quarantined record. Lines that never parsed come back as text."""
+    try:
+        return json.loads(item["raw_json"])
+    except ValueError:
+        return item["raw_json"]
+
+
 def save_and_approve(yaml_text: str, actor: str) -> list[dict[str, str]]:
     """Validate, save and approve a config, then write its file.
 
     Returns validation problems. Nothing is saved when there are any. The name
     check also keeps the file inside the configs folder.
     """
-    problems = engine.validate_config(yaml_text)
+    problems = errors_only(engine.validate_config(yaml_text))
     if problems:
         return problems
     config = engine.load_config(yaml_text)
@@ -81,7 +99,7 @@ def import_configs(actor: str = "startup") -> dict[str, list[Any]]:
         if PLACEHOLDER in text:
             report["skipped"].append(path.name)
             continue
-        problems = engine.validate_config(text)
+        problems = errors_only(engine.validate_config(text))
         if problems:
             report["invalid"].append({"file": path.name, "problems": problems})
             continue

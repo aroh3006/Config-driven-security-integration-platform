@@ -1,0 +1,78 @@
+{
+ "meta": {
+  "query_time": 0.01,
+  "pagination": {
+   "offset": 0,
+   "limit": 3,
+   "total": 9,
+   "next": "eyJhZnRlciI6M30"
+  },
+  "trace_id": "abc"
+ },
+ "resources": [
+  {
+   "composite_id": "ldt:00000000000000000000000000000000",
+   "device": {
+    "device_id": "00000000000000000000000000000000",
+    "hostname": "LAPTOP-000",
+    "local_ip": "10.0.0.10",
+    "platform_name": "Windows"
+   },
+   "created_timestamp": "2026-10-31T00:00:00Z",
+   "max_severity_displayname": "High",
+   "status": "new",
+   "behaviors": [
+    {
+     "tactic": "Execution",
+     "technique": "Command and Scripting Interpreter",
+     "technique_id": "T1059",
+     "sha256": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+    }
+   ],
+   "description": "Suspicious PowerShell execution detected"
+  },
+  {
+   "composite_id": "ldt:00000000000000000000000000000001",
+   "device": {
+    "device_id": "00000000000000000000000000000001",
+    "hostname": "LAPTOP-001",
+    "local_ip": "10.0.0.11",
+    "platform_name": "Windows"
+   },
+   "created_timestamp": "2026-10-31T01:00:00Z",
+   "max_severity_displayname": "Medium",
+   "status": "new",
+   "behaviors": [
+    {
+     "tactic": "Execution",
+     "technique": "Command and Scripting Interpreter",
+     "technique_id": "T1059",
+     "sha256": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+    }
+   ],
+   "description": "Suspicious PowerShell execution detected"
+  },
+  {
+   "composite_id": "ldt:00000000000000000000000000000002",
+   "device": {
+    "device_id": "00000000000000000000000000000002",
+    "hostname": "LAPTOP-002",
+    "local_ip": "10.0.0.12",
+    "platform_name": "Windows"
+   },
+   "created_timestamp": "2026-10-31T02:00:00Z",
+   "max_severity_displayname": "Critical",
+   "status": "new",
+   "behaviors": [
+    {
+     "tactic": "Execution",
+     "technique": "Command and Scripting Interpreter",
+     "technique_id": "T1059",
+     "sha256": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+    }
+   ],
+   "description": "Suspicious PowerShell execution detected"
+  }
+ ],
+ "errors": []
+}

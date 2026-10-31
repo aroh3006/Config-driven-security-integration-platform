@@ -8,6 +8,7 @@ should show it. A stub must never get mistaken for a real run.
 from __future__ import annotations
 
 import dataclasses
+import functools
 import importlib
 import logging
 from typing import Any, Callable
@@ -15,6 +16,7 @@ from typing import Any, Callable
 from dotenv import load_dotenv
 
 from app import engine_stubs
+from store import db
 
 load_dotenv()
 
@@ -53,12 +55,37 @@ load_config = _bind("load_config", "engine.config", "load_config", engine_stubs.
 run_connector = _bind("run_connector", "engine.runner", "run_connector", engine_stubs.run_connector)
 test_connection = _bind("test_connection", "engine.runner", "test_connection", engine_stubs.test_connection)
 profile_sample = _bind("profile_sample", "engine.profiler", "profile_sample", engine_stubs.profile_sample)
-replay_record = _bind("replay_record", "engine.runner", "replay_record", engine_stubs.replay_record)
 start_scheduler = _bind("start_scheduler", "engine.scheduler", "start", engine_stubs.start_scheduler)
 pause = _bind("pause", "engine.scheduler", "pause", engine_stubs.pause)
 resume = _bind("resume", "engine.scheduler", "resume", engine_stubs.resume)
 set_fault = _bind("set_fault", "engine.faults", "set_fault", engine_stubs.set_fault)
 clear_fault = _bind("clear_fault", "engine.faults", "clear_fault", engine_stubs.clear_fault)
+
+
+def _replay_with_mapper(map_record: Callable[..., Any], connector_name: str, raw: Any) -> dict[str, Any]:
+    """Map a quarantined record again with the connector's current config."""
+    from engine.errors import ConfigError, MappingError
+
+    connector = db.get_connector(connector_name)
+    if connector is None:
+        return {"ok": False, "reason": f"unknown connector {connector_name!r}"}
+    if not isinstance(raw, dict):
+        return {"ok": False, "reason": "record is not a JSON object"}
+    try:
+        config = load_config(connector["config_yaml"])
+        row = map_record(raw, config)
+    except (ConfigError, MappingError) as exc:
+        return {"ok": False, "reason": db.mask_text(str(exc))}
+    row.update(raw=raw, tenant_id=config.tenant_id)
+    return {"ok": True, "row": row}
+
+
+_map_record, _mapper_missing = _load("engine.mapper", "map_record", engine_stubs.replay_record)
+if _mapper_missing:
+    replay_record = engine_stubs.replay_record
+    _stubbed.append("replay_record")
+else:
+    replay_record = functools.partial(_replay_with_mapper, _map_record)
 
 if _stubbed:
     log.warning("engine functions running as stubs: %s", ", ".join(_stubbed))
@@ -68,6 +95,8 @@ def to_dict(result: Any) -> dict[str, Any]:
     """Turn a RunResult into a dict, whichever class the engine uses for it."""
     if isinstance(result, dict):
         return result
+    if hasattr(result, "to_dict"):
+        return result.to_dict()
     if dataclasses.is_dataclass(result):
         return dataclasses.asdict(result)
     return result.model_dump()

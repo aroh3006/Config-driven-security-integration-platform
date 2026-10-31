@@ -77,6 +77,16 @@ python -m app.cli onboard <sample-file>
 python -m app.cli serve
 ```
 
+## Engine commands
+
+These work directly on a config file:
+
+```bash
+python -m engine validate configs/okta-users.yaml
+python -m engine test configs/okta-users.yaml
+python -m engine profile tests/samples/cisa_kev.json --name cisa-kev
+```
+
 ## Layout
 
 | Path | What it holds |
@@ -90,6 +100,7 @@ python -m app.cli serve
 
 ## Security notes
 
+- Hosts are allowlisted per connector. Internal and cloud metadata addresses are blocked, and only `mock: true` connectors may call loopback.
 - Configs hold secret names only. Values come from environment variables loaded from a gitignored `.env`.
 - The store masks secrets in audit details, run errors and quarantine reasons.
 - A config edited on disk moves to `config_changed` and needs approval before it runs.

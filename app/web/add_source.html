@@ -7,9 +7,14 @@
   <ul class="plain">{% for p in problems %}<li><code>{{ p.path or "config" }}</code>: {{ p.message }}{% if p.hint %}. {{ p.hint }}{% endif %}</li>{% endfor %}</ul>
 </div>
 {% endif %}
+{% if warnings %}
+<div class="warn"><strong>Warnings:</strong>
+  <ul class="plain">{% for p in warnings %}<li><code>{{ p.path or "config" }}</code>: {{ p.message }}{% if p.hint %}. {{ p.hint }}{% endif %}</li>{% endfor %}</ul>
+</div>
+{% endif %}
 {% if valid %}<div class="ok">The config is valid.</div>{% endif %}
 {% if profile %}
-<div class="ok">Draft made from your sample. Confidence {{ profile.confidence }}. Paging guess: {{ profile.paging_guess }}. Records path: <code>{{ profile.records_path or "(top level)" }}</code>.
+<div class="ok">Draft made from your sample. Confidence {{ profile.confidence.level if profile.confidence is mapping else profile.confidence }}. Paging guess: {{ profile.paging_guess }}. Records path: <code>{{ profile.records_path or "(top level)" }}</code>.
   {% if profile.unmapped_fields %}Unmapped: {{ profile.unmapped_fields|join(", ") }}.{% endif %}</div>
 {% endif %}
 
