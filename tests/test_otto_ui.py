@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from app import patch, sidebar, theme
+from app import patch, sidebar, takeapart, theme
 from app.api import create_app
 from store import db
 
@@ -228,6 +228,75 @@ def test_home_shows_more_link_for_many_connectors(client):
 
 def test_home_with_no_connectors_still_renders(client):
     assert client.get("/").status_code == 200
+
+
+# Connector page and config taken apart
+
+def test_connector_page_has_status_timeline_and_views(client):
+    add(client, "demo")
+    client.post("/connectors/demo/run")
+    page = client.get("/ui/connector/demo").text
+    assert "[ Status ]" in page and "[ What Otto did · UTC ]" in page
+    assert "/ui/live/demo" in page and "/ui/connector/demo/config" in page
+    assert "[ Run history ]" in page and "Nothing quarantined" in page
+
+
+def test_connector_quarantine_can_be_replayed_from_the_page(client):
+    add(client, "demo")
+    good = db.add_quarantine("demo", None, {"id": "fixed-1"}, "was bad")
+    page = client.get("/ui/connector/demo").text
+    assert f'action="/ui/quarantine/{good}/replay"' in page
+    done = client.post(f"/ui/quarantine/{good}/replay", follow_redirects=True).text
+    assert "Record replayed" in done and "Replayed" in done
+
+
+def test_config_is_split_into_five_answers():
+    text = CONFIG.format(name="demo", entity="user", mock="false") + "retry: { delays_s: [1] }\nnotify: { slack_after_failures: 2 }\n"
+    parts = takeapart.split(text)
+    assert [block["part"] for block in parts["blocks"]] == [
+        "Auth plugin", "Request builder", "Pagination plugin", "Scheduler and checkpoint", "Mapper and validator",
+    ]
+    assert "demo_token" in parts["blocks"][0]["code"]
+    assert "x.example.com" in parts["blocks"][1]["code"]
+    assert "page_number" in parts["blocks"][2]["code"]
+    assert "every 15m" in parts["blocks"][3]["code"]
+    assert "id: id" in parts["blocks"][4]["code"]
+    assert "delays_s" in parts["tuning"] and "slack_after_failures" in parts["tuning"]
+
+
+def test_every_key_of_a_config_lands_somewhere():
+    text = "name: a\nentity: user\nmap: { id: id }\nauth_failure: { header: X, contains: Y }\nbrand_new_key: 1\n"
+    parts = takeapart.split(text)
+    assert "auth_failure" in parts["blocks"][0]["code"]
+    assert "brand_new_key" in parts["other"]
+    assert "not set" in parts["blocks"][2]["code"]
+
+
+@pytest.mark.parametrize("text", ["[unclosed", "just text"])
+def test_take_apart_survives_a_broken_config(text):
+    assert takeapart.split(text)["error"]
+
+
+def test_take_apart_page(client):
+    add(client, "demo")
+    page = client.get("/ui/connector/demo/config").text
+    assert "demo.yaml" in page and "CONFIG" in page
+    assert "Change a block, not code" in page
+    assert "demo_token" in page
+    assert client.get("/ui/connector/nope/config").status_code == 404
+
+
+def test_take_apart_page_shows_a_broken_stored_config(client):
+    add(client, "demo")
+    db.save_connector("demo", "user", "<b>: [unclosed", "bad-hash")
+    page = client.get("/ui/connector/demo/config").text
+    assert "not valid YAML" in page and "<b>: [unclosed" not in page
+    assert client.get("/ui/connector/demo").status_code == 200
+
+
+def test_configs_page_links_to_take_apart(client):
+    add(client, "demo")
+    assert 'href="/ui/connector/demo/config"' in client.get("/ui/configs").text
 
 
 def test_new_pages_load(client):

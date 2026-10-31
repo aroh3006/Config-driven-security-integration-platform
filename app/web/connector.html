@@ -1,15 +1,29 @@
 {% extends "base.html" %}
+{% from "_icons.html" import status %}
 {% block title %}{{ connector.name }}{% endblock %}
 {% block content %}
-<h1>{{ connector.name }}
-  {% if row.mock %}<span class="badge mock">mock</span>{% endif %}
-  <span class="badge {{ row.status }}">{{ row.status }}</span></h1>
-<p>{{ row.summary }}. Next run: {{ row.next_run }}.</p>
+<div class="head">
+  <div class="head-title">
+    <h1>{{ connector.name }}</h1>
+    {{ status(row.status) }}
+    {% if row.mock %}<span class="badge mock">mock</span>{% endif %}
+  </div>
+  <div class="actions">
+    <a class="pill" href="/ui/live/{{ connector.name|urlencode }}">Show request</a>
+    <a class="pill" href="/ui/connector/{{ connector.name|urlencode }}/config">Take config apart</a>
+  </div>
+</div>
+
+<p class="note">{{ row.summary }}. Next run: {{ row.next_run }}.</p>
+
 {% if connector.approved_hash != connector.config_hash %}
-<div class="bad"><strong>This config has changed since it was approved.</strong> It will not run until someone approves it.
-  <form class="inline" method="post" action="/ui/connector/{{ connector.name|urlencode }}/approve"><button>Approve current config</button></form></div>
+<div class="bad head">
+  <span><strong>This config has changed since it was approved.</strong> It will not run until someone approves it.</span>
+  <form class="inline" method="post" action="/ui/connector/{{ connector.name|urlencode }}/approve"><button>Approve current config</button></form>
+</div>
 {% endif %}
-<p>
+
+<div class="actions">
   <form class="inline" method="post" action="/ui/connector/{{ connector.name|urlencode }}/test"><button>Test</button></form>
   <form class="inline" method="post" action="/ui/connector/{{ connector.name|urlencode }}/run"><button>Run now</button></form>
   {% if connector.enabled %}
@@ -17,35 +31,69 @@
   {% else %}
   <form class="inline" method="post" action="/ui/connector/{{ connector.name|urlencode }}/resume"><button>Resume</button></form>
   {% endif %}
-</p>
+</div>
+
 {% if test %}{% include "_test_result.html" %}{% endif %}
 
-<h2>Run history</h2>
-{% if runs %}
-<div class="wrap"><table>
-  <tr><th>Started</th><th>Finished</th><th>Status</th><th>Pulled</th><th>Bad</th><th>Pages</th><th>Retries</th><th>Last error</th></tr>
-  {% for run in runs %}
-  <tr><td>{{ run.started_at }}</td><td>{{ run.finished_at or "" }}</td>
-    <td><span class="badge {{ run.status }}">{{ run.status }}</span></td>
-    <td>{{ run.records_pulled }}</td><td>{{ run.records_bad }}</td><td>{{ run.pages }}</td><td>{{ run.retries }}</td>
-    <td>{{ run.last_error or "" }}</td></tr>
-  {% endfor %}
-</table></div>
-{% else %}<p class="muted">No runs yet.</p>{% endif %}
+<div class="split">
+  <div class="stack">
+    <section class="card" aria-label="Run history">
+      <span class="label">[ Run history ]</span>
+      {% if runs %}
+      <div class="wrap"><table>
+        <thead><tr><th>Started</th><th>Finished</th><th>Status</th><th class="num">Pulled</th><th class="num">Bad</th><th class="num">Pages</th><th class="num">Retries</th><th>Last error</th></tr></thead>
+        <tbody>
+        {% for run in runs %}
+        <tr><td class="when">{{ run.started_at|replace("T", " ")|replace("Z", "") }}</td><td class="when">{{ (run.finished_at or "")|replace("T", " ")|replace("Z", "") }}</td>
+          <td>{{ status(run.status) }}</td>
+          <td class="num">{{ "{:,}".format(run.records_pulled) }}</td><td class="num">{{ run.records_bad }}</td><td class="num">{{ run.pages }}</td><td class="num">{{ run.retries }}</td>
+          <td class="err">{{ run.last_error or "" }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table></div>
+      {% else %}<p class="note">No runs yet.</p>{% endif %}
+    </section>
 
-<h2>Quarantined records</h2>
-{% if quarantine %}
-<div class="wrap"><table>
-  <tr><th>Id</th><th>Reason</th><th>Record</th><th>When</th><th></th></tr>
-  {% for item in quarantine %}
-  <tr><td>{{ item.id }}</td><td>{{ item.reason }}</td><td><pre>{{ item.raw_json }}</pre></td><td>{{ item.created_at }}</td>
-    <td>{% if item.replayed %}Replayed{% else %}
-      <form class="inline" method="post" action="/ui/quarantine/{{ item.id }}/replay"><button>Replay</button></form>{% endif %}</td></tr>
-  {% endfor %}
-</table></div>
-{% else %}<p class="muted">Nothing quarantined.</p>{% endif %}
+    <section class="card" aria-label="Quarantined records">
+      <span class="label">[ Quarantined records ]</span>
+      {% if quarantine %}
+      <div class="wrap"><table>
+        <thead><tr><th>Id</th><th>Reason</th><th>Record</th><th>When</th><th>Replay</th></tr></thead>
+        <tbody>
+        {% for item in quarantine %}
+        <tr><td class="num">{{ item.id }}</td><td class="err">{{ item.reason }}</td><td class="raw"><pre>{{ item.raw_json }}</pre></td><td class="when">{{ item.created_at|replace("T", " ")|replace("Z", "") }}</td>
+          <td>{% if item.replayed %}Replayed{% else %}
+            <form class="inline" method="post" action="/ui/quarantine/{{ item.id }}/replay"><button aria-label="Replay record {{ item.id }}">Replay</button></form>{% endif %}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table></div>
+      {% else %}<p class="note">Nothing quarantined.</p>{% endif %}
+    </section>
 
-<h2>Config (secret names only)</h2>
-<pre>{{ connector.config_yaml }}</pre>
-<p class="muted">Hash {{ connector.config_hash[:12] }}. Approved {{ (connector.approved_hash or "never")[:12] }}.</p>
+    <section class="card" aria-label="Config">
+      <span class="label">[ Config · secret names only ]</span>
+      <pre>{{ connector.config_yaml }}</pre>
+      <p class="muted">Hash {{ connector.config_hash[:12] }}. Approved {{ (connector.approved_hash or "never")[:12] }}.</p>
+    </section>
+  </div>
+
+  <div class="stack">
+    <section class="card" aria-label="Status">
+      <span class="label">[ Status ]</span>
+      <span class="big-status t-{{ view.status.tone }}">{{ view.status.title }}</span>
+      <span class="mono-line">{{ view.status.line }}</span>
+      <span class="note">{{ view.status.detail }}</span>
+    </section>
+    <section class="card" aria-label="What Otto did">
+      <span class="label">[ What Otto did · UTC ]</span>
+      {% if view.timeline %}
+      <ol class="timeline">
+        {% for line in view.timeline %}
+        <li><time>{{ line.at }}</time><span{% if line.tone %} class="t-{{ line.tone }}"{% endif %}>{{ line.text }}</span></li>
+        {% endfor %}
+      </ol>
+      {% else %}<p class="note">No request log for the last run yet.</p>{% endif %}
+    </section>
+  </div>
+</div>
 {% endblock %}

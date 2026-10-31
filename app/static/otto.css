@@ -455,6 +455,9 @@ td a { color: var(--text); }
 td.num, th.num { font-family: var(--mono); text-align: right; white-space: nowrap; }
 td.name { min-width: 170px; color: var(--text); font-family: var(--mono); font-size: 12.5px; }
 td.err { min-width: 180px; color: var(--muted); font-size: 12.5px; }
+td.when { color: var(--muted); font: 400 12px var(--mono); white-space: nowrap; }
+td.raw { min-width: 280px; }
+td.raw pre { max-height: 180px; overflow-y: auto; }
 .cell-actions { display: flex; gap: 6px; }
 .cell-actions .btn, .cell-actions button { padding: 0 10px; }
 

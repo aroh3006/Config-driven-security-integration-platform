@@ -17,7 +17,18 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
-from app import connectors, engine_client as engine, formbuilder, health, live, patch, scenarios, sidebar, theme
+from app import (
+    connectors,
+    engine_client as engine,
+    formbuilder,
+    health,
+    live,
+    patch,
+    scenarios,
+    sidebar,
+    takeapart,
+    theme,
+)
 from store import db
 
 ACTOR = "web"
@@ -29,6 +40,8 @@ ENTITY_PAGES = {"users": "user", "devices": "device", "alerts": "alert"}
 
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "web"))
 templates.env.globals["tone"] = theme.tone
+# Changes when the stylesheet changes, so a browser never shows an old copy.
+templates.env.globals["css_version"] = int((Path(__file__).parent / "static" / "otto.css").stat().st_mtime)
 
 HOME_ENGINE = {
     "eyebrow": "The engine",
@@ -104,6 +117,24 @@ def build_router(
             runs=db.list_runs(name, limit=20),
             quarantine=db.list_quarantine(name, limit=50),
             test=test,
+            view=scenarios.build(name, connector, [], live.snapshot(name)),
+        )
+
+    @router.get("/ui/connector/{name}/config", response_class=HTMLResponse)
+    def config_apart_page(request: Request, name: str) -> HTMLResponse:
+        connector = db.get_connector(name)
+        if connector is None:
+            raise HTTPException(404, f"unknown connector {name!r}")
+        checked = engine.validate_config(connector["config_yaml"])
+        return _render(
+            request,
+            "config_apart.html",
+            nav="configs",
+            current=name,
+            connector=connector,
+            parts=takeapart.split(connector["config_yaml"]),
+            errors=connectors.errors_only(checked),
+            warnings=connectors.warnings_only(checked),
         )
 
     @router.get("/", response_class=HTMLResponse)

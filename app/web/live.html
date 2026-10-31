@@ -11,7 +11,7 @@
   </div>
   <div class="actions">
     <a class="pill on" href="/ui/live/{{ connector.name|urlencode }}" aria-current="page">Show request</a>
-    {% block view_links %}{% endblock %}
+    <a class="pill" href="/ui/connector/{{ connector.name|urlencode }}/config">Take config apart</a>
     <a class="pill" href="/ui/connector/{{ connector.name|urlencode }}">Connector</a>
     <a class="pill" href="/ui/demo">Demo controls</a>
   </div>

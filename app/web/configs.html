@@ -6,7 +6,7 @@
 {% if rows %}
 <div class="config-grid">
   {% for row in rows %}
-  <a class="card config-card" href="/ui/connector/{{ row.name|urlencode }}">
+  <a class="card config-card" href="/ui/connector/{{ row.name|urlencode }}/config">
     <span class="mono">{{ row.name }}.yaml</span>
     <span class="note">{{ row.detail }} · {{ row.entity }}</span>
     <span>{{ status(row.status) }}{% if row.mock %} <span class="badge mock">mock</span>{% endif %}</span>
