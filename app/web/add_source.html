@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Add source{% endblock %}
+{% block content %}
+<h1>Add a source</h1>
+{% if problems %}
+<div class="bad"><strong>Fix these first:</strong>
+  <ul class="plain">{% for p in problems %}<li><code>{{ p.path or "config" }}</code>: {{ p.message }}{% if p.hint %}. {{ p.hint }}{% endif %}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+{% if valid %}<div class="ok">The config is valid.</div>{% endif %}
+{% if profile %}
+<div class="ok">Draft made from your sample. Confidence {{ profile.confidence }}. Paging guess: {{ profile.paging_guess }}. Records path: <code>{{ profile.records_path or "(top level)" }}</code>.
+  {% if profile.unmapped_fields %}Unmapped: {{ profile.unmapped_fields|join(", ") }}.{% endif %}</div>
+{% endif %}
+
+<form method="post" action="/ui/add">
+<fieldset><legend>Start from a sample (optional)</legend>
+  <textarea name="sample" rows="5" placeholder="Paste a sample API response, NDJSON or CSV">{{ sample or "" }}</textarea>
+  <button name="action" value="sample">Draft config from sample</button>
+</fieldset>
+
+<fieldset><legend>Source</legend>
+  <label>Name <input name="name" value="{{ form.name }}" placeholder="my-source"></label>
+  <label>Entity <select name="entity">{% for e in ("user","device","alert") %}<option {% if form.entity == e %}selected{% endif %}>{{ e }}</option>{% endfor %}</select></label>
+  <label><input type="checkbox" name="mock" {% if form.mock == "on" %}checked{% endif %}> Mock source</label>
+  <label>Base URL <input name="base_url" size="40" value="{{ form.base_url }}" placeholder="https://api.example.com"></label>
+  <label>Schedule <input name="schedule" value="{{ form.schedule }}" placeholder="every 15m"></label>
+</fieldset>
+
+<fieldset><legend>Login</legend>
+  <label>Type <select name="auth_type">{% for t in auth_types %}<option {% if form.auth_type == t %}selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
+  <label>Secret name <input name="auth_secret" value="{{ form.auth_secret or "" }}" placeholder="okta_key"></label>
+  <div class="row muted">Name only. The value goes in <code>.env</code>. For example, okta_key is read from OKTA_KEY.</div>
+  <label>api_key header <input name="auth_header" value="{{ form.auth_header or "" }}" placeholder="X-API-Key"></label>
+  <label>or query param <input name="auth_query_param" value="{{ form.auth_query_param or "" }}"></label>
+  <label>prefix <input name="auth_prefix" value="{{ form.auth_prefix or "" }}"></label>
+  <label>basic username secret <input name="auth_username_secret" value="{{ form.auth_username_secret or "" }}"></label>
+  <br>
+  <label>oauth2 token URL <input name="auth_token_url" size="36" value="{{ form.auth_token_url or "" }}"></label>
+  <label>client id secret <input name="auth_client_id_secret" value="{{ form.auth_client_id_secret or "" }}"></label>
+  <label>client secret secret <input name="auth_client_secret_secret" value="{{ form.auth_client_secret_secret or "" }}"></label>
+  <label>scope <input name="auth_scope" value="{{ form.auth_scope or "" }}"></label>
+  <label>send as <select name="auth_send_as">{% for s in ("body","basic") %}<option {% if form.auth_send_as == s %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
+</fieldset>
+
+<fieldset><legend>Request</legend>
+  <label>Path <input name="path" size="40" value="{{ form.path }}" placeholder="/api/v1/items"></label>
+  <label>Format <select name="format">{% for f in ("json","ndjson","csv") %}<option {% if form.format == f %}selected{% endif %}>{{ f }}</option>{% endfor %}</select></label>
+  <label>Records path <input name="records_path" value="{{ form.records_path }}" placeholder="items"></label>
+  <input type="hidden" name="method" value="{{ form.method }}">
+  <div class="row"><label>Query params (one <code>key: value</code> per line)</label>
+  <textarea name="params" rows="2">{{ form.params }}</textarea></div>
+  <div class="muted">The form sends GET. For a read-only POST, edit the method and <code>read_only_post</code> in the YAML below.</div>
+</fieldset>
+
+<fieldset><legend>Paging</legend>
+  <label>Type <select name="paging_type">{% for t in paging_types %}<option {% if form.paging_type == t %}selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
+  <div class="muted">Fill in only the fields for the type you chose.</div>
+  <label>page param <input name="paging_page_param" value="{{ form.paging_page_param or "" }}" placeholder="page"></label>
+  <label>size param <input name="paging_size_param" value="{{ form.paging_size_param or "" }}" placeholder="per_page"></label>
+  <label>size <input name="paging_size" size="5" value="{{ form.paging_size or "" }}"></label>
+  <label>start <input name="paging_start" size="5" value="{{ form.paging_start or "" }}"></label>
+  <br>
+  <label>offset param <input name="paging_offset_param" value="{{ form.paging_offset_param or "" }}" placeholder="startIndex"></label>
+  <label>limit param <input name="paging_limit_param" value="{{ form.paging_limit_param or "" }}"></label>
+  <label>limit <input name="paging_limit" size="5" value="{{ form.paging_limit or "" }}"></label>
+  <label>total path <input name="paging_total_path" value="{{ form.paging_total_path or "" }}"></label>
+  <br>
+  <label>token path <input name="paging_token_path" value="{{ form.paging_token_path or "" }}" placeholder="nextPageToken"></label>
+  <label>token param <input name="paging_token_param" value="{{ form.paging_token_param or "" }}"></label>
+  <label>token in <select name="paging_token_in">{% for s in ("query","body") %}<option {% if form.paging_token_in == s %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
+  <label>next URL path <input name="paging_next_url_path" value="{{ form.paging_next_url_path or "" }}" placeholder="next"></label>
+</fieldset>
+
+<fieldset><legend>Mapping to the common schema</legend>
+  <textarea name="map" rows="7">{{ form.map }}</textarea>
+  <button name="action" value="build">Build YAML from the form</button>
+</fieldset>
+
+<fieldset><legend>Config YAML (this is what gets validated, tested and saved)</legend>
+  <textarea name="yaml" rows="20">{{ form.yaml }}</textarea>
+  <button name="action" value="validate">Validate</button>
+  <button name="action" value="test">Test</button>
+  <button name="action" value="save">Save</button>
+</fieldset>
+</form>
+
+{% if preview %}
+<h2>Sample preview</h2>
+<div class="wrap"><table>
+  <tr><th style="width:50%">Raw</th><th>Mapped</th></tr>
+  {% for pair in preview %}<tr><td><pre>{{ pair.raw }}</pre></td><td><pre>{{ pair.mapped }}</pre></td></tr>{% endfor %}
+</table></div>
+{% endif %}
+{% if test %}{% include "_test_result.html" %}{% endif %}
+{% endblock %}

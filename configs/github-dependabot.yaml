@@ -1,0 +1,33 @@
+name: github-dependabot
+entity: alert
+mock: false
+source:
+  type: http
+  base_url: https://api.github.com
+  allow_hosts: [api.github.com]
+auth:
+  type: bearer
+  secret: github_token
+request:
+  method: GET
+  path: /repos/YOUR-GITHUB-ORG/YOUR-DEMO-REPO/dependabot/alerts
+  params: { per_page: 100, state: open }
+  headers:
+    Accept: application/vnd.github+json
+    X-GitHub-Api-Version: "2026-03-10"
+  format: json
+  records_path: ""
+pagination:
+  type: link_header
+schedule: every 1h
+retry: { delays_s: [1, 2, 4], jitter: false }
+rate_limit: { max_rps: 2, remaining_header: X-RateLimit-Remaining, reset_header: X-RateLimit-Reset }
+limits: { max_pages: 50, timeout_s: 30, max_response_mb: 20 }
+map:
+  id: number
+  type: { const: "dependabot_alert" }
+  severity: security_advisory.severity
+  timestamp: { path: created_at, transform: to_utc }
+  description: security_advisory.summary
+  cve: security_advisory.cve_id
+notify: { slack_after_failures: 3 }

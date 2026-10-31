@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}{{ entity|capitalize }}{% endblock %}
+{% block content %}
+<h1>{{ entity|capitalize }}</h1>
+<form method="get" class="row">
+  <label>Source <select name="source"><option value="">All sources</option>
+    {% for s in sources %}<option {% if s == source %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
+  <label>Search <input name="q" value="{{ q }}"></label>
+  <button>Filter</button>
+</form>
+<p class="muted">Showing {{ rows|length }} rows (up to 200).</p>
+<div class="wrap"><table>
+  <tr>{% for c in columns %}<th>{{ c }}</th>{% endfor %}</tr>
+  {% for row in rows %}<tr>{% for c in columns %}<td>{{ row[c] if row[c] is not none else "" }}</td>{% endfor %}</tr>{% endfor %}
+</table></div>
+{% endblock %}

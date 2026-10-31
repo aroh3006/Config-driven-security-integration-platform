@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}People{% endblock %}
+{% block content %}
+<h1>One view per person</h1>
+<form method="get" class="row">
+  <label>Person <select name="email"><option value="">Choose an email</option>
+    {% for e in emails %}<option {% if e == email %}selected{% endif %}>{{ e }}</option>{% endfor %}</select></label>
+  <button>Show</button>
+</form>
+{% if records %}
+<h2>Accounts</h2>
+{% with table_rows=records.users, table_columns=user_columns %}{% include "_rows.html" %}{% endwith %}
+<h2>Devices</h2>
+{% with table_rows=records.devices, table_columns=device_columns %}{% include "_rows.html" %}{% endwith %}
+<h2>Alerts that mention this email</h2>
+{% with table_rows=records.alerts, table_columns=alert_columns %}{% include "_rows.html" %}{% endwith %}
+{% endif %}
+{% endblock %}

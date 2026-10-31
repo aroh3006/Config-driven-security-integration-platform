@@ -1,0 +1,48 @@
+name: mock-firewall
+entity: alert
+mock: true
+source:
+  type: http
+  base_url: http://localhost:9000
+  allow_hosts: [localhost]
+auth:
+  type: api_key
+  header: X-API-Key
+  secret: mock_firewall_key
+request:
+  method: GET
+  path: /firewall/api/v1/logs
+  format: json
+  records_path: events
+pagination:
+  type: offset
+  offset_param: offset
+  limit_param: limit
+  limit: 100
+  total_path: total
+schedule: every 15m
+retry: { delays_s: [1, 2, 4], jitter: false }
+rate_limit: { max_rps: 2, remaining_header: X-Rate-Limit-Remaining, reset_header: X-Rate-Limit-Reset }
+limits: { max_pages: 50, timeout_s: 5, max_response_mb: 20 }
+map:
+  id: externalId
+  type: name
+  severity:
+    path: severity
+    transform: str
+    lookup:
+      "0": info
+      "1": low
+      "2": low
+      "3": low
+      "4": medium
+      "5": medium
+      "6": medium
+      "7": high
+      "8": high
+      "9": critical
+      "10": critical
+  timestamp: { path: rt, transform: to_utc }
+  description: msg
+  cve: cs1
+notify: { slack_after_failures: 3 }

@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Audit log{% endblock %}
+{% block content %}
+<h1>Audit log</h1>
+<div class="wrap"><table>
+  <tr><th>When</th><th>Actor</th><th>Action</th><th>Target</th><th>Detail</th></tr>
+  {% for row in rows %}<tr><td>{{ row.ts }}</td><td>{{ row.actor }}</td><td>{{ row.action }}</td><td>{{ row.target or "" }}</td><td>{{ row.detail or "" }}</td></tr>{% endfor %}
+</table></div>
+{% endblock %}

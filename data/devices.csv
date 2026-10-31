@@ -1,0 +1,13 @@
+asset_id,hostname,ip,os,owner,last_seen
+AST-1001,lap-ann-01,10.20.1.11,Windows 11 23H2,ann@example.com,2026-10-30T18:22:05Z
+AST-1002,lap-bob-01,10.20.1.12,macOS 14.6,bob@example.com,2026-10-30T17:05:41Z
+AST-1003,lap-chitra-01,10.20.1.13,Windows 11 23H2,chitra@example.com,2026-10-29T09:12:00Z
+AST-1004,lap-dev-01,10.20.1.14,Ubuntu 24.04,dev@example.com,2026-10-30T20:44:19Z
+AST-1005,srv-web-01,10.30.0.21,Ubuntu 22.04,it-ops@example.com,2026-10-31T01:00:00Z
+AST-1006,srv-web-02,10.30.0.22,Ubuntu 22.04,it-ops@example.com,2026-10-31T01:00:00Z
+AST-1007,srv-db-01,10.30.0.31,Debian 12,it-ops@example.com,2026-10-31T01:00:03Z
+AST-1008,srv-files-01,10.30.0.41,Windows Server 2022,it-ops@example.com,2026-10-30T23:59:58Z
+AST-1009,lap-esha-01,10.20.1.15,macOS 15.0,esha@example.com,2026-10-28T14:30:10Z
+AST-1010,lap-farid-01,10.20.1.16,Windows 10 22H2,farid@example.com,2026-10-25T11:02:47Z
+AST-1011,kiosk-lobby-01,10.40.2.5,Windows 10 22H2,,2026-10-30T08:00:00Z
+,lap-unknown-01,10.20.1.99,Windows 11 23H2,gita@example.com,2026-10-30T10:15:00Z

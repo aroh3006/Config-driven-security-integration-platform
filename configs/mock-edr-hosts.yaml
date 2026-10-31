@@ -1,0 +1,36 @@
+name: mock-edr-hosts
+entity: device
+mock: true
+source:
+  type: http
+  base_url: http://localhost:9000
+  allow_hosts: [localhost]
+auth:
+  type: oauth2_client_credentials
+  token_url: http://localhost:9000/edr/oauth2/token
+  client_id_secret: mock_edr_client_id
+  client_secret_secret: mock_edr_client_secret
+  send_as: body
+request:
+  method: GET
+  path: /edr/devices/combined/devices/v1
+  params: { limit: 100 }
+  format: json
+  records_path: resources
+pagination:
+  type: body_token
+  token_path: meta.pagination.next
+  token_param: after
+  token_in: query
+schedule: every 15m
+retry: { delays_s: [1, 2, 4], jitter: false }
+rate_limit: { max_rps: 2, remaining_header: X-Rate-Limit-Remaining, reset_header: X-Rate-Limit-Reset }
+limits: { max_pages: 50, timeout_s: 5, max_response_mb: 20 }
+map:
+  id: device_id
+  hostname: hostname
+  ip: local_ip
+  os: os_version
+  owner: last_login_user
+  last_seen: { path: last_seen, transform: to_utc }
+notify: { slack_after_failures: 3 }

@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Demo controls{% endblock %}
+{% block content %}
+<h1>Demo controls</h1>
+<p>Set a fault on a connector, then press Run now on the <a href="/">health page</a>.</p>
+<div class="wrap"><table>
+  <tr><th>Connector</th><th>Status</th><th>Set fault</th></tr>
+  {% for c in connectors %}
+  <tr><td>{{ c.name }}</td><td><span class="badge {{ c.status }}">{{ c.status }}</span></td>
+    <td><form class="inline" method="post" action="/ui/demo">
+      <input type="hidden" name="connector" value="{{ c.name }}">
+      <select name="mode">{% for m in modes %}<option>{{ m }}</option>{% endfor %}</select>
+      <button>Set</button></form>
+      <form class="inline" method="post" action="/ui/demo">
+      <input type="hidden" name="connector" value="{{ c.name }}">
+      <input type="hidden" name="mode" value="off"><button>Clear</button></form></td></tr>
+  {% endfor %}
+</table></div>
+<h2>What each fault shows</h2>
+<ul class="plain">
+  <li><code>503x3</code>: three failures, retries at 1s, 2s and 4s, then success.</li>
+  <li><code>503x4</code>: one failure too many. The run is marked failed.</li>
+  <li><code>429:30</code>: rate limited, waits 30 seconds and carries on.</li>
+  <li><code>timeout</code>: requests time out, retries run out and the run fails.</li>
+  <li><code>badrecord</code>: one bad record goes to quarantine and the run continues.</li>
+</ul>
+{% endblock %}

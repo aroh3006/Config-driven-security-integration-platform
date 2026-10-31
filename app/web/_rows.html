@@ -1,0 +1,6 @@
+{% if table_rows %}
+<div class="wrap"><table>
+  <tr>{% for c in table_columns %}<th>{{ c }}</th>{% endfor %}</tr>
+  {% for row in table_rows %}<tr>{% for c in table_columns %}<td>{{ row[c] if row[c] is not none else "" }}</td>{% endfor %}</tr>{% endfor %}
+</table></div>
+{% else %}<p class="muted">None.</p>{% endif %}

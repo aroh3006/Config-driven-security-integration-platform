@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}KEV match{% endblock %}
+{% block content %}
+<h1>Alerts on actively exploited CVEs</h1>
+{% if not kev_count %}
+<p>The <code>{{ kev_source }}</code> connector has no rows yet. Add it and run it to see matches.</p>
+{% else %}
+<p>{{ rows|length }} alerts have a CVE listed among the {{ "{:,}".format(kev_count) }} entries in <code>{{ kev_source }}</code>.</p>
+{% with table_rows=rows, table_columns=columns %}{% include "_rows.html" %}{% endwith %}
+{% endif %}
+{% endblock %}

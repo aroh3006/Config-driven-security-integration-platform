@@ -1,0 +1,21 @@
+name: devices-file
+entity: device
+mock: false
+source:
+  type: file
+  path: data/devices.csv
+auth:
+  type: none
+request:
+  format: csv
+  records_path: ""
+pagination:
+  type: none
+schedule: every 1h
+map:
+  id: asset_id
+  hostname: hostname
+  ip: ip
+  os: os
+  owner: owner
+  last_seen: { path: last_seen, transform: to_utc }

@@ -1,0 +1,21 @@
+{
+  "title": "CISA Catalog of Known Exploited Vulnerabilities",
+  "catalogVersion": "2026.10.30",
+  "count": 2,
+  "vulnerabilities": [
+    {
+      "cveID": "CVE-2021-44228",
+      "vendorProject": "Apache",
+      "product": "Log4j2",
+      "vulnerabilityName": "Apache Log4j2 Remote Code Execution Vulnerability",
+      "dateAdded": "2021-12-10"
+    },
+    {
+      "cveID": "CVE-2023-34362",
+      "vendorProject": "Progress",
+      "product": "MOVEit Transfer",
+      "vulnerabilityName": "Progress MOVEit Transfer SQL Injection Vulnerability",
+      "dateAdded": "2023-06-02"
+    }
+  ]
+}

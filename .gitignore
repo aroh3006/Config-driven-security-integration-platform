@@ -191,7 +191,6 @@ cython_debug/
 # .idea/
 
 # Abstra
-#   Abstra is an AI-powered process automation framework.
 #   Ignore directories containing user credentials, local state, and settings.
 #   Learn more at https://abstra.io/docs
 .abstra/
@@ -219,8 +218,36 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-  .env
-  *.db
-  secrets/
-  node_modules/
-  Config-Driven-Integration-Platform-Plan.*
+.env
+*.db
+secrets/
+node_modules/
+Config-Driven-Integration-Platform-Plan.*
+
+# Secrets and local data
+.env
+.env.*
+!.env.example
+*.db
+*.db-wal
+*.db-shm
+secrets/
+
+# Test scratch space
+.pytest_tmp/
+
+# Notes, plans and design documents
+notes/
+docs/
+Config-Driven-Integration-Platform-Plan.*
+*-plan.md
+*-brief.md
+BLUEPRINT*
+
+# Agent and editor config
+CLAUDE.md
+.claude/
+.cursor/
+.aider*
+.vscode/
+.idea/

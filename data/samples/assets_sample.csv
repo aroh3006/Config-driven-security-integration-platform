@@ -1,0 +1,3 @@
+asset_id,hostname,ip,os,owner,last_seen
+AST-2001,lap-a,10.20.5.1,Windows 11 23H2,ann@example.com,2026-10-30T18:22:05Z
+AST-2002,lap-b,10.20.5.2,macOS 15.0,bob@example.com,2026-10-30T17:05:41Z

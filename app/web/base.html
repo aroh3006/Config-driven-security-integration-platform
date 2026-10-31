@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+{% block head %}{% endblock %}
+<title>{% block title %}Integration platform{% endblock %}</title>
+<style>
+  body { font: 14px/1.45 system-ui, sans-serif; margin: 0; color: #1c2430; background: #f6f7f9; }
+  nav { background: #1c2430; padding: 10px 16px; display: flex; flex-wrap: wrap; gap: 14px; }
+  nav a { color: #fff; text-decoration: none; }
+  nav a.brand { font-weight: 600; margin-right: 10px; }
+  main { padding: 16px; max-width: 1280px; margin: auto; }
+  h1 { font-size: 20px; margin: 4px 0 12px; }
+  h2 { font-size: 16px; margin: 22px 0 8px; }
+  a { color: #1a56b0; }
+  .wrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; background: #fff; }
+  th, td { border: 1px solid #dfe3e8; padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { background: #eef0f3; font-weight: 600; }
+  pre { background: #f0f2f5; padding: 8px; margin: 0; overflow-x: auto; font-size: 12px; white-space: pre-wrap; word-break: break-word; }
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; background: #dde1e6; white-space: nowrap; }
+  .healthy, .success { background: #c9f0d4; color: #0b5a26; }
+  .degraded, .partial, .config_changed, .running { background: #fde9b8; color: #6f4e00; }
+  .failing, .failed, .auth_failed, .circuit_open { background: #f9c9c6; color: #7c120c; }
+  .mock { background: #d6e4fb; color: #16427f; }
+  .flash { background: #e3edfc; border: 1px solid #b5cdf3; padding: 8px 12px; margin-bottom: 12px; }
+  .warn { background: #fff3cd; border: 1px solid #e8d38b; padding: 8px 12px; margin-bottom: 12px; }
+  .bad { background: #fde2e0; border: 1px solid #efb5b0; padding: 8px 12px; margin-bottom: 12px; }
+  .ok { background: #dcf5e3; border: 1px solid #a7dfb8; padding: 8px 12px; margin-bottom: 12px; }
+  .muted { color: #5b6673; }
+  form.inline { display: inline; }
+  button { font: inherit; padding: 3px 10px; cursor: pointer; }
+  input, select, textarea { font: inherit; padding: 4px 6px; max-width: 100%; box-sizing: border-box; }
+  textarea { width: 100%; font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+  fieldset { border: 1px solid #dfe3e8; background: #fff; margin: 0 0 12px; }
+  label { display: inline-block; margin: 4px 14px 4px 0; }
+  .row { margin-bottom: 8px; }
+  ul.plain { margin: 0; padding-left: 18px; }
+</style>
+</head>
+<body>
+<nav>
+  <a class="brand" href="/">Integration platform</a>
+  <a href="/">Health</a>
+  <a href="/ui/add">Add source</a>
+  <a href="/ui/records/users">Users</a>
+  <a href="/ui/records/devices">Devices</a>
+  <a href="/ui/records/alerts">Alerts</a>
+  <a href="/ui/people">People</a>
+  <a href="/ui/kev">KEV match</a>
+  <a href="/ui/demo">Demo controls</a>
+  <a href="/ui/audit">Audit</a>
+</nav>
+<main>
+  {% if stubbed %}
+  <div class="warn"><strong>Engine stubs active. Data on this page is fake.</strong> Not real yet: {{ stubbed|join(", ") }}.</div>
+  {% endif %}
+  {% if msg %}<div class="flash">{{ msg }}</div>{% endif %}
+  {% block content %}{% endblock %}
+</main>
+</body>
+</html>

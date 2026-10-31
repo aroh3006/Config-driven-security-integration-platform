@@ -1,0 +1,40 @@
+name: nvd-cves
+entity: alert
+mock: false
+source:
+  type: http
+  base_url: https://services.nvd.nist.gov
+  allow_hosts: [services.nvd.nist.gov]
+auth:
+  type: api_key
+  header: apiKey
+  secret: nvd_key
+request:
+  method: GET
+  path: /rest/json/cves/2.0
+  params: { cvssV3Severity: CRITICAL }
+  format: json
+  records_path: vulnerabilities
+pagination:
+  type: offset
+  offset_param: startIndex
+  limit_param: resultsPerPage
+  limit: 200
+  total_path: totalResults
+schedule: every 1h
+retry: { delays_s: [1, 2, 4], jitter: false }
+rate_limit: { max_rps: 1 }
+limits: { max_pages: 3, timeout_s: 60, max_response_mb: 20 }
+map:
+  id: cve.id
+  type: { const: "vulnerability" }
+  severity:
+    coalesce:
+      - cve.metrics.cvssMetricV31.0.cvssData.baseSeverity
+      - cve.metrics.cvssMetricV30.0.cvssData.baseSeverity
+      - cve.metrics.cvssMetricV2.0.baseSeverity
+    transform: lower
+  timestamp: { path: cve.published, transform: to_utc }
+  description: cve.descriptions.0.value
+  cve: cve.id
+notify: { slack_after_failures: 3 }

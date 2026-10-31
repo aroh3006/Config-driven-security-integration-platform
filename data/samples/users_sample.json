@@ -1,0 +1,14 @@
+[
+  {
+    "id": "00u1abcd",
+    "status": "ACTIVE",
+    "lastLogin": "2026-10-30T18:22:05.000Z",
+    "profile": { "firstName": "Ann", "lastName": "Rao", "login": "ann@example.com" }
+  },
+  {
+    "id": "00u2efgh",
+    "status": "SUSPENDED",
+    "lastLogin": null,
+    "profile": { "firstName": "Bob", "lastName": "Iyer", "login": "bob@example.com" }
+  }
+]

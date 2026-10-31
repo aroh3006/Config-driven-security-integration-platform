@@ -1,0 +1,27 @@
+name: cisa-kev
+entity: alert
+mock: false
+source:
+  type: http
+  base_url: https://www.cisa.gov
+  allow_hosts: [www.cisa.gov]
+auth:
+  type: none
+request:
+  method: GET
+  path: /sites/default/files/feeds/known_exploited_vulnerabilities.json
+  format: json
+  records_path: vulnerabilities
+pagination:
+  type: none
+schedule: every 1h
+retry: { delays_s: [1, 2, 4], jitter: false }
+limits: { max_pages: 1, timeout_s: 60, max_response_mb: 20 }
+map:
+  id: cveID
+  type: { const: "known_exploited_vulnerability" }
+  severity: { const: "high" }
+  timestamp: { path: dateAdded, transform: to_utc }
+  description: vulnerabilityName
+  cve: cveID
+notify: { slack_after_failures: 3 }

@@ -1,0 +1,39 @@
+name: jira-tickets
+entity: alert
+mock: false
+source:
+  type: http
+  base_url: https://YOUR-SITE.atlassian.net
+  allow_hosts: [YOUR-SITE.atlassian.net]
+auth:
+  type: basic
+  username_secret: jira_email
+  secret: jira_token
+request:
+  method: GET
+  path: /rest/api/3/search/jql
+  params:
+    jql: "project = YOUR-PROJECT ORDER BY created DESC"
+    maxResults: 100
+    fields: "summary,priority,created,issuetype"
+  format: json
+  records_path: issues
+pagination:
+  type: body_token
+  token_path: nextPageToken
+  token_param: nextPageToken
+  token_in: query
+schedule: every 15m
+retry: { delays_s: [1, 2, 4], jitter: false }
+rate_limit: { max_rps: 2 }
+limits: { max_pages: 50, timeout_s: 30, max_response_mb: 20 }
+map:
+  id: key
+  type: fields.issuetype.name
+  severity:
+    path: fields.priority.name
+    lookup: { Highest: critical, High: high, Medium: medium, Low: low, Lowest: low }
+    default: unknown
+  timestamp: { path: fields.created, transform: to_utc }
+  description: fields.summary
+notify: { slack_after_failures: 3 }

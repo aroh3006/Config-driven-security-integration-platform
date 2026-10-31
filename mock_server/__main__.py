@@ -1,0 +1,46 @@
+"""Start the mock server on port 9000: python -m mock_server"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import uvicorn
+
+from mock_server import app as mock_app
+
+ENV_BLOCK = f"""\
+MOCK_FIREWALL_KEY={mock_app.FIREWALL_KEY}
+MOCK_EDR_CLIENT_ID={mock_app.EDR_CLIENT_ID}
+MOCK_EDR_CLIENT_SECRET={mock_app.EDR_CLIENT_SECRET}
+MOCK_CLOUD_KEY={mock_app.CLOUD_KEY}
+"""
+
+CREDENTIALS = f"""\
+# Mock credentials
+
+These work only against the local mock server. They are not secrets.
+
+Paste this block into `.env`:
+
+```
+{ENV_BLOCK}```
+
+Extra values for failure tests:
+
+| Value | Result |
+| --- | --- |
+| Firewall key `{mock_app.FIREWALL_KEY_NO_ACCESS}` | 403 insufficient_scope |
+| EDR client `{mock_app.EDR_HOSTS_ONLY_CLIENT_ID}` with secret `{mock_app.EDR_HOSTS_ONLY_CLIENT_SECRET}` | Hosts work. Detections give 403. |
+"""
+
+
+def main() -> None:
+    Path(__file__).with_name("CREDENTIALS.md").write_text(CREDENTIALS, encoding="utf-8")
+    print("Mock credentials for .env (also in mock_server/CREDENTIALS.md):")
+    print(ENV_BLOCK)
+    print("API docs: http://localhost:9000/docs")
+    uvicorn.run(mock_app.create_app(), host="127.0.0.1", port=9000)
+
+
+if __name__ == "__main__":
+    main()

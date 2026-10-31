@@ -1,0 +1,38 @@
+name: mock-cloud-audit
+entity: alert
+mock: true
+source:
+  type: http
+  base_url: http://localhost:9000
+  allow_hosts: [localhost]
+auth:
+  type: api_key
+  header: X-Api-Key
+  secret: mock_cloud_key
+request:
+  method: POST
+  read_only_post: true
+  path: /cloud/
+  headers:
+    X-Amz-Target: CloudTrail_20131101.LookupEvents
+    Content-Type: application/x-amz-json-1.1
+  body: { MaxResults: 50 }
+  format: json
+  records_path: Events
+pagination:
+  type: body_token
+  token_path: NextToken
+  token_param: NextToken
+  token_in: body
+schedule: every 15m
+retry: { delays_s: [1, 2, 4], jitter: false }
+rate_limit: { max_rps: 2 }
+limits: { max_pages: 50, timeout_s: 5, max_response_mb: 20 }
+map:
+  id: EventId
+  type: EventName
+  severity: { const: "info" }
+  timestamp: { path: EventTime, transform: to_utc }
+  description: { join: [EventName, Username], sep: " by " }
+  cve: Cve
+notify: { slack_after_failures: 3 }

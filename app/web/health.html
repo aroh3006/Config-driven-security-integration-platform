@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block head %}<meta http-equiv="refresh" content="10">{% endblock %}
+{% block title %}Health{% endblock %}
+{% block content %}
+<h1>Connection health</h1>
+{% if not rows %}
+<p>No connectors yet. <a href="/ui/add">Add a source</a> or fill in the placeholders in <code>/configs</code> and restart.</p>
+{% else %}
+<div class="wrap"><table>
+  <tr><th>Connector</th><th>Entity</th><th>Status</th><th>Last run</th><th>Pulled</th><th>Bad</th><th>Last error</th><th>Next run</th><th>Actions</th></tr>
+  {% for row in rows %}
+  <tr>
+    <td><a href="/ui/connector/{{ row.name|urlencode }}">{{ row.name }}</a>
+      {% if row.mock %}<span class="badge mock">mock</span>{% endif %}</td>
+    <td>{{ row.entity }}</td>
+    <td><span class="badge {{ row.status }}">{{ row.status }}</span>
+      {% if row.running %}<span class="badge running">running</span>{% endif %}</td>
+    <td>{{ row.last_run }}</td>
+    <td>{{ "{:,}".format(row.records_pulled) }}</td>
+    <td>{{ row.records_bad }}</td>
+    <td>{{ row.last_error or "" }}</td>
+    <td>{{ row.next_run }}</td>
+    <td style="white-space:nowrap">
+      <form class="inline" method="post" action="/ui/connector/{{ row.name|urlencode }}/test"><button>Test</button></form>
+      <form class="inline" method="post" action="/ui/connector/{{ row.name|urlencode }}/run"><button>Run now</button></form>
+      {% if row.enabled %}
+      <form class="inline" method="post" action="/ui/connector/{{ row.name|urlencode }}/pause"><button>Pause</button></form>
+      {% else %}
+      <form class="inline" method="post" action="/ui/connector/{{ row.name|urlencode }}/resume"><button>Resume</button></form>
+      {% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+</table></div>
+<h2>Summary</h2>
+<ul class="plain">{% for row in rows %}<li>{{ row.summary }}</li>{% endfor %}</ul>
+{% endif %}
+<p class="muted">Refreshes every 10 seconds.</p>
+{% endblock %}

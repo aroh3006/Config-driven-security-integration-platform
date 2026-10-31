@@ -1,0 +1,32 @@
+name: okta-users
+entity: user
+mock: false
+source:
+  type: http
+  base_url: https://YOUR-ORG.okta.com
+  allow_hosts: [YOUR-ORG.okta.com]
+auth:
+  type: api_key
+  header: Authorization
+  prefix: "SSWS "
+  secret: okta_key
+request:
+  method: GET
+  path: /api/v1/users
+  params: { limit: 200 }
+  format: json
+  records_path: ""
+pagination:
+  type: link_header
+schedule: every 15m
+retry: { delays_s: [1, 2, 4], jitter: false }
+rate_limit: { max_rps: 2, remaining_header: X-Rate-Limit-Remaining, reset_header: X-Rate-Limit-Reset }
+limits: { max_pages: 50, timeout_s: 30, max_response_mb: 20 }
+map:
+  id: id
+  name: { join: [profile.firstName, profile.lastName], sep: " " }
+  email: profile.login
+  status: { path: status, transform: lower }
+  last_login: { path: lastLogin, transform: to_utc }
+required: [id, email]
+notify: { slack_after_failures: 3 }
