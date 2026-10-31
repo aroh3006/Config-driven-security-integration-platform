@@ -215,10 +215,12 @@ GITHUB_ADVISORIES = (
 )
 JIRA_PRIORITIES = (("Highest", "1"), ("High", "2"), ("Medium", "3"), ("Low", "4"), ("Lowest", "5"))
 JIRA_STATUSES = (("To Do", "1", "new"), ("In Progress", "3", "indeterminate"), ("Done", "10001", "done"))
+JIRA_BASE = "https://example.atlassian.example.com"
+JIRA_EXPAND = "renderedFields,names,schema,operations,editmeta,changelog,versionedRepresentations"
 JIRA_STATUS_CATEGORIES = {
-    "new": {"id": 2, "key": "new", "colorName": "blue-gray", "name": "To Do"},
-    "indeterminate": {"id": 4, "key": "indeterminate", "colorName": "yellow", "name": "In Progress"},
-    "done": {"id": 3, "key": "done", "colorName": "green", "name": "Done"},
+    "new": {"self": f"{JIRA_BASE}/rest/api/3/statuscategory/2", "id": 2, "key": "new", "colorName": "blue-gray", "name": "To Do"},
+    "indeterminate": {"self": f"{JIRA_BASE}/rest/api/3/statuscategory/4", "id": 4, "key": "indeterminate", "colorName": "yellow", "name": "In Progress"},
+    "done": {"self": f"{JIRA_BASE}/rest/api/3/statuscategory/3", "id": 3, "key": "done", "colorName": "green", "name": "Done"},
 }
 JIRA_ISSUE_TYPES = (("Incident", "10003"), ("Task", "10001"), ("Bug", "10004"))
 GITHUB_DISMISS_REASONS = ("fix_started", "inaccurate", "no_bandwidth", "not_used", "tolerable_risk")
@@ -610,11 +612,40 @@ def _jira_time(moment: datetime) -> str:
 
 
 def _jira_user(first: str, last: str, email: str) -> dict[str, Any]:
+    account_id = _atlassian_id(email)
     return {
-        "accountId": _atlassian_id(email),
+        "self": f"{JIRA_BASE}/rest/api/3/user?accountId={account_id}",
+        "accountId": account_id,
+        "accountType": "atlassian",
         "displayName": f"{first} {last}",
         "emailAddress": email,
         "active": True,
+        "timeZone": "Asia/Calcutta",
+    }
+
+
+def _jira_issue_type(name: str, type_id: str) -> dict[str, Any]:
+    return {
+        "self": f"{JIRA_BASE}/rest/api/3/issuetype/{type_id}",
+        "id": type_id,
+        "description": "",
+        "iconUrl": f"{JIRA_BASE}/rest/api/2/universal_avatar/view/type/issuetype/avatar/10318",
+        "name": name,
+        "subtask": False,
+        "avatarId": 10318,
+        "entityId": str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{name}.example.com")),
+        "hierarchyLevel": 0,
+    }
+
+
+def _jira_status(name: str, status_id: str, category: str) -> dict[str, Any]:
+    return {
+        "self": f"{JIRA_BASE}/rest/api/3/status/{status_id}",
+        "description": "",
+        "iconUrl": f"{JIRA_BASE}/images/icons/statuses/generic.png",
+        "name": name,
+        "id": status_id,
+        "statusCategory": JIRA_STATUS_CATEGORIES[category],
     }
 
 
@@ -636,7 +667,7 @@ def jira_issues(now: datetime, project: str, count: int = 150) -> list[dict[str,
         done = category == "done"
         issues.append(
             {
-                "expand": "operations,versionedRepresentations,editmeta,changelog,renderedFields",
+                "expand": JIRA_EXPAND,
                 "id": str(10000 + n),
                 "key": f"{project}-{n}",
                 "fields": {
@@ -646,12 +677,19 @@ def jira_issues(now: datetime, project: str, count: int = 150) -> list[dict[str,
                         "version": 1,
                         "content": [{"type": "paragraph", "content": [{"type": "text", "text": summary}]}],
                     },
-                    "issuetype": {"id": issue_type_id, "name": issue_type, "subtask": False},
+                    "issuetype": _jira_issue_type(issue_type, issue_type_id),
                     "priority": {"id": priority_id, "name": priority},
-                    "status": {"id": status_id, "name": status, "statusCategory": JIRA_STATUS_CATEGORIES[category]},
+                    "status": _jira_status(status, status_id, category),
                     "resolution": {"id": "10000", "name": "Done"} if done else None,
                     "resolutiondate": _jira_time(updated) if done else None,
-                    "project": {"id": "10000", "key": project, "name": "Security Operations", "projectTypeKey": "software"},
+                    "project": {
+                        "self": f"{JIRA_BASE}/rest/api/3/project/10000",
+                        "id": "10000",
+                        "key": project,
+                        "name": "Security Operations",
+                        "projectTypeKey": "software",
+                        "simplified": True,
+                    },
                     "created": _jira_time(created),
                     "updated": _jira_time(updated),
                     "assignee": _jira_user(first, last, email),

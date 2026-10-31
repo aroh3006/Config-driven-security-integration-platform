@@ -9,6 +9,7 @@ auth:
   type: basic
   username_secret: mock_jira_email
   secret: mock_jira_token
+auth_failure: { header: X-Seraph-LoginReason, contains: AUTHENTICATED_FAILED }
 request:
   method: GET
   path: /rest/api/3/search/jql

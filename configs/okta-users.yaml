@@ -3,8 +3,8 @@ entity: user
 mock: false
 source:
   type: http
-  base_url: https://YOUR-ORG.okta.com
-  allow_hosts: [YOUR-ORG.okta.com]
+  base_url: https://integrator-2886728.okta.com
+  allow_hosts: [integrator-2886728.okta.com]
 auth:
   type: api_key
   header: Authorization

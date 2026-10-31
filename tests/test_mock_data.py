@@ -97,7 +97,7 @@ def test_jira_issues_keep_time_order_and_resolve_when_done():
         fields = issue["fields"]
         assert when(fields["updated"]) >= when(fields["created"])
         assert (fields["resolution"] is not None) == (fields["status"]["statusCategory"]["key"] == "done")
-    assert all({"id", "key", "colorName", "name"} == set(i["fields"]["status"]["statusCategory"]) for i in issues)
+    assert all({"self", "id", "key", "colorName", "name"} == set(i["fields"]["status"]["statusCategory"]) for i in issues)
 
 
 def test_jira_keeps_one_account_id_per_person():

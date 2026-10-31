@@ -9,6 +9,7 @@ auth:
   type: api_key
   header: apiKey
   secret: nvd_key
+auth_failure: { header: message, contains: Invalid apiKey }
 request:
   method: GET
   path: /rest/json/cves/2.0

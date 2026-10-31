@@ -91,7 +91,7 @@ def test_jira_results_match_the_spec(client):
 def test_error_bodies_match_the_specs(client):
     okta = client.get(USERS, headers={"Authorization": "SSWS wrong"})
     assert set(okta.json()) == spec.OKTA_ERROR_FIELDS
-    jira = client.get(SEARCH, params=JQL)
+    jira = client.get(SEARCH, auth=JIRA, params={"jql": "order by key desc"})
     assert set(jira.json()) <= spec.JIRA_ERROR_FIELDS
     assert set(client.get(MEMBERS).json()) == {"message", "documentation_url", "status"}
 
@@ -244,9 +244,13 @@ def test_github_alerts_errors(client):
 
 # Jira behaviour
 
-def test_jira_requires_basic_auth(client):
-    assert client.get(SEARCH, params=JQL).status_code == 401
-    assert client.get(SEARCH, params=JQL, auth=(saas.JIRA_EMAIL, "wrong")).status_code == 401
+def test_jira_treats_a_bad_login_as_anonymous_like_the_live_api(client):
+    anonymous = client.get(SEARCH, params=JQL)
+    assert (anonymous.status_code, anonymous.json()) == (200, {"issues": [], "isLast": True})
+    assert "X-Seraph-LoginReason" not in anonymous.headers
+    wrong = client.get(SEARCH, params=JQL, auth=(saas.JIRA_EMAIL, "wrong"))
+    assert (wrong.status_code, wrong.json()["issues"]) == (200, [])
+    assert wrong.headers["X-Seraph-LoginReason"] == "AUTHENTICATED_FAILED"
 
 
 @pytest.mark.parametrize("jql", [None, "order by key desc", "created > -7d"])
@@ -354,7 +358,8 @@ def test_cloud_event_is_a_full_cloudtrail_record():
 def test_jira_uses_its_own_rate_limit_headers(client):
     response = client.get(SEARCH, params=JQL, auth=JIRA)
     assert response.headers["X-RateLimit-Limit"] == "600"
-    assert response.headers["X-RateLimit-NearLimit"] == "false"
+    assert "X-RateLimit-NearLimit" not in response.headers
+    assert response.headers["RateLimit-Policy"] == '"jira-burst-based";q=100;w=1'
     assert "X-Rate-Limit-Remaining" not in response.headers
     assert "X-RateLimit-Reset" not in response.headers
 

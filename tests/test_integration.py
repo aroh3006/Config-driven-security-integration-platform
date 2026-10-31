@@ -179,6 +179,14 @@ def test_rerun_does_not_duplicate(run):
     assert db.count_records("device", "mock-edr-hosts") == first
 
 
+def test_wrong_jira_key_is_auth_failed_not_an_empty_success(run, monkeypatch):
+    monkeypatch.setenv("MOCK_JIRA_TOKEN", "wrong-key-value")
+    result = run("mock-jira-tickets")
+    assert (result.status, result.records_pulled) == ("auth_failed", 0)
+    assert "credentials rejected" in result.last_error
+    assert "wrong-key-value" not in result.last_error
+
+
 def test_wrong_key_gives_auth_failed(run, monkeypatch):
     monkeypatch.setenv("MOCK_FIREWALL_KEY", "wrong-key-value")
     result = run("mock-firewall")

@@ -36,6 +36,7 @@ Other values follow the standard ranges. External IPs are in 192.0.2.0/24, 198.5
 - **Okta errors:** `E0000011` for a bad token, `E0000006` for no permission, `E0000047` for rate limiting.
 - **GitHub:** `X-RateLimit-*` headers, an API version header, `per_page` capped at 100. Members have no name or email, as in the live list. Alerts come newest first and numbers rise with time.
 - **Jira:** returns only ids unless `fields` names some, rejects unbounded JQL, leaves `nextPageToken` off the last page and writes timestamps like `+0000` with no colon. Descriptions use Atlassian Document Format.
+- **Jira bad login:** a wrong token or no login gets 200 with an empty list, as on a live site. Only a wrong token adds `X-Seraph-LoginReason: AUTHENTICATED_FAILED`. Connectors need `auth_failure` to catch this.
 - **All:** responses over 500 bytes are gzip compressed when the client accepts it. Keys are compared in constant time.
 
 ## Where the mocks differ from the real thing
@@ -49,6 +50,7 @@ Other values follow the standard ranges. External IPs are in 192.0.2.0/24, 198.5
 - **Okta and GitHub 429:** both mocks send `Retry-After`. Real Okta signals the wait with `X-Rate-Limit-Reset`.
 - **AWS status codes:** real CloudTrail answers bad credentials and throttling with HTTP 400. The mock uses 401 and 429 so the failure tests behave the same on every source.
 - **Commands in EDR detections:** process names and command lines are illustrative.
+- **Jira priority:** every mock issue has one. The team-managed projects on our live site return `priority: null`.
 - **GitHub 429:** real GitHub can also signal rate limits with a 403. The mock always uses 429.
 - **Links in data:** URLs inside records point at example.com, not the mock server.
 

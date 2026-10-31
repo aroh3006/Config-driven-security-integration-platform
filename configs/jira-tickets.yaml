@@ -3,17 +3,18 @@ entity: alert
 mock: false
 source:
   type: http
-  base_url: https://YOUR-SITE.atlassian.net
-  allow_hosts: [YOUR-SITE.atlassian.net]
+  base_url: https://mitigatahackathon.atlassian.net
+  allow_hosts: [mitigatahackathon.atlassian.net]
 auth:
   type: basic
   username_secret: jira_email
   secret: jira_token
+auth_failure: { header: X-Seraph-LoginReason, contains: AUTHENTICATED_FAILED }
 request:
   method: GET
   path: /rest/api/3/search/jql
   params:
-    jql: "project = YOUR-PROJECT ORDER BY created DESC"
+    jql: "project = SAM1 ORDER BY created DESC"
     maxResults: 100
     fields: "summary,priority,created,issuetype"
   format: json

@@ -79,11 +79,15 @@ def _github_rate_headers(headers: dict[str, str], request: Request) -> dict[str,
 def _jira_rate_headers(headers: dict[str, str]) -> dict[str, str]:
     """Jira spells these X-RateLimit-*. Reset and reason come only with a 429."""
     limit, remaining = int(headers["X-Rate-Limit-Limit"]), int(headers["X-Rate-Limit-Remaining"])
-    return {
+    renamed = {
         "X-RateLimit-Limit": str(limit),
         "X-RateLimit-Remaining": str(remaining),
-        "X-RateLimit-NearLimit": "true" if remaining < limit * 0.2 else "false",
+        "RateLimit": f'"jira-burst-based";r={remaining};t=1',
+        "RateLimit-Policy": '"jira-burst-based";q=100;w=1',
     }
+    if remaining < limit * 0.2:
+        renamed["X-RateLimit-NearLimit"] = "true"
+    return renamed
 
 
 def _jira_throttled_headers(headers: dict[str, str], wait: int) -> dict[str, str]:
@@ -306,9 +310,14 @@ def build_router(now: datetime, bad_record_active: Callable[[str], bool]) -> API
         fields: str | None = None,
         nextPageToken: str | None = None,
     ) -> JSONResponse:
-        """The last page has no nextPageToken, as Atlassian documents."""
+        """The last page has no nextPageToken, as Atlassian documents.
+
+        A bad login is not an error here. Live Jira treats the caller as anonymous
+        and answers 200 with no issues. Only a wrong token gets a telling header.
+        """
         if not jira_authorized(request):
-            return _jira_error(401, "Client must be authenticated to access this resource.")
+            signal = {"X-Seraph-LoginReason": "AUTHENTICATED_FAILED"} if "authorization" in request.headers else {}
+            return JSONResponse({"issues": [], "isLast": True}, headers=signal)
         allowed, limits, wait = jira_limit.hit(JIRA_EMAIL)
         headers = _jira_rate_headers(limits)
         if not allowed:
