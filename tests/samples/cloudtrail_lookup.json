@@ -1,0 +1,60 @@
+{
+ "Events": [
+  {
+   "EventId": "6e5d4c3b-0000-4a1f-9e8d-1234567890ab",
+   "EventName": "ConsoleLogin",
+   "ReadOnly": "false",
+   "AccessKeyId": "ASIAEXAMPLE0000",
+   "EventTime": 1793420000,
+   "EventSource": "signin.amazonaws.com",
+   "Username": "admin0",
+   "Resources": [],
+   "CloudTrailEvent": "{\"sourceIPAddress\": \"203.0.113.5\", \"awsRegion\": \"ap-south-1\"}"
+  },
+  {
+   "EventId": "6e5d4c3b-0001-4a1f-9e8d-1234567890ab",
+   "EventName": "CreateAccessKey",
+   "ReadOnly": "false",
+   "AccessKeyId": "ASIAEXAMPLE0000",
+   "EventTime": 1793420060,
+   "EventSource": "iam.amazonaws.com",
+   "Username": "admin1",
+   "Resources": [],
+   "CloudTrailEvent": "{\"sourceIPAddress\": \"203.0.113.6\", \"awsRegion\": \"ap-south-1\"}"
+  },
+  {
+   "EventId": "6e5d4c3b-0002-4a1f-9e8d-1234567890ab",
+   "EventName": "DeleteTrail",
+   "ReadOnly": "false",
+   "AccessKeyId": "ASIAEXAMPLE0000",
+   "EventTime": 1793420120,
+   "EventSource": "cloudtrail.amazonaws.com",
+   "Username": "admin2",
+   "Resources": [],
+   "CloudTrailEvent": "{\"sourceIPAddress\": \"203.0.113.7\", \"awsRegion\": \"ap-south-1\"}"
+  },
+  {
+   "EventId": "6e5d4c3b-0003-4a1f-9e8d-1234567890ab",
+   "EventName": "ConsoleLogin",
+   "ReadOnly": "false",
+   "AccessKeyId": "ASIAEXAMPLE0000",
+   "EventTime": 1793420180,
+   "EventSource": "signin.amazonaws.com",
+   "Username": "admin3",
+   "Resources": [],
+   "CloudTrailEvent": "{\"sourceIPAddress\": \"203.0.113.8\", \"awsRegion\": \"ap-south-1\"}"
+  },
+  {
+   "EventId": "6e5d4c3b-0004-4a1f-9e8d-1234567890ab",
+   "EventName": "CreateAccessKey",
+   "ReadOnly": "false",
+   "AccessKeyId": "ASIAEXAMPLE0000",
+   "EventTime": 1793420240,
+   "EventSource": "iam.amazonaws.com",
+   "Username": "admin4",
+   "Resources": [],
+   "CloudTrailEvent": "{\"sourceIPAddress\": \"203.0.113.9\", \"awsRegion\": \"ap-south-1\"}"
+  }
+ ],
+ "NextToken": "eyJub3RoaW5nIjoiaGVyZSJ9"
+}

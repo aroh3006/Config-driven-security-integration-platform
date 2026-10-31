@@ -1,0 +1,9 @@
+hostname,ip,os,owner,last_seen,serial_number
+LAPTOP-000,10.0.0.10,Windows 11 Pro,user0@example.com,2026-10-30T00:00:00Z,SN000000
+LAPTOP-001,10.0.0.11,Windows 11 Pro,user1@example.com,2026-10-31T01:00:00Z,SN000001
+LAPTOP-002,10.0.0.12,Windows 11 Pro,user2@example.com,2026-10-30T02:00:00Z,SN000002
+LAPTOP-003,10.0.0.13,Windows 11 Pro,user3@example.com,2026-10-31T03:00:00Z,SN000003
+LAPTOP-004,10.0.0.14,Windows 11 Pro,user4@example.com,2026-10-30T04:00:00Z,SN000004
+LAPTOP-005,10.0.0.15,Windows 11 Pro,user5@example.com,2026-10-31T05:00:00Z,SN000005
+LAPTOP-006,10.0.0.16,Windows 11 Pro,user6@example.com,2026-10-30T06:00:00Z,SN000006
+LAPTOP-007,10.0.0.17,Windows 11 Pro,user7@example.com,2026-10-31T07:00:00Z,SN000007
