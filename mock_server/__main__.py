@@ -1,13 +1,17 @@
-"""Start the mock server on port 9000: python -m mock_server"""
+"""Start the mock server on port 9000: python -m mock_server
+
+Records are clean by default. Add --messy to spoil every 100th record.
+"""
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import uvicorn
 
 from mock_server import app as mock_app
-from mock_server import saas, styles
+from mock_server import data, saas, styles
 
 ENV_BLOCK = f"""\
 MOCK_FIREWALL_KEY={mock_app.FIREWALL_KEY}
@@ -52,6 +56,7 @@ def main() -> None:
     print("Mock credentials for .env (also in mock_server/CREDENTIALS.md):")
     print(ENV_BLOCK)
     print("API docs: http://localhost:9000/docs")
+    data.MESSY = "--messy" in sys.argv[1:]
     uvicorn.run(mock_app.create_app(), host="127.0.0.1", port=9000)
 
 

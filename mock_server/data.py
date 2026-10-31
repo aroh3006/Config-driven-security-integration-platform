@@ -321,6 +321,11 @@ def _put(record: dict[str, Any], path: str, value: Any) -> None:
     record[leaf] = value
 
 
+# Tests keep this on to prove damaged records are quarantined. The running server
+# turns it off unless started with --messy. A source then only shows a fault on purpose.
+MESSY = True
+
+
 def _make_messy(
     records: list[dict[str, Any]], id_field: str, time_field: str, type_field: str, first_kind: int = 0
 ) -> None:
@@ -329,6 +334,8 @@ def _make_messy(
     Short lists only reach the first kind or two. `first_kind` moves the start of
     the cycle. That way every kind appears across the sources.
     """
+    if not MESSY:
+        return
     for position, index in enumerate(range(50, len(records), 100)):
         record = records[index]
         kind = (position + first_kind) % 4

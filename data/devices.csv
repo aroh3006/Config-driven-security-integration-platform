@@ -10,4 +10,4 @@ AST-1008,srv-files-01,10.30.0.41,Windows Server 2022,it-ops@example.com,2026-10-
 AST-1009,lap-esha-01,10.20.1.15,macOS 15.0,esha@example.com,2026-10-28T14:30:10Z
 AST-1010,lap-farid-01,10.20.1.16,Windows 10 22H2,farid@example.com,2026-10-25T11:02:47Z
 AST-1011,kiosk-lobby-01,10.40.2.5,Windows 10 22H2,,2026-10-30T08:00:00Z
-,lap-unknown-01,10.20.1.99,Windows 11 23H2,gita@example.com,2026-10-30T10:15:00Z
+AST-1012,lap-gita-01,10.20.1.99,Windows 11 23H2,gita@example.com,2026-10-30T10:15:00Z

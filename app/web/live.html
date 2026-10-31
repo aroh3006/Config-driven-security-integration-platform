@@ -6,7 +6,7 @@
 <div class="head">
   <div class="head-title">
     <h1>{{ connector.name }}</h1>
-    {{ status(row.status) }}
+    {{ status(head_status) }}
     {% if row.mock %}<span class="badge mock">mock</span>{% endif %}
   </div>
   <div class="actions">
@@ -90,7 +90,7 @@
     <section class="card" aria-label="Connection readings">
       <span class="label">[ Connections · now ]</span>
       {% for peer in view.peers %}
-      <div class="reading"><a href="/ui/live/{{ peer.name|urlencode }}">{{ peer.name }}</a>{{ status(peer.status) }}</div>
+      <div class="reading"><a href="/ui/live/{{ peer.name|urlencode }}">{{ peer.name }}</a><span class="reading-end"><span class="muted">{{ "{:,}".format(peer.stored) }} {{ peer.entity }}s</span>{{ status(peer.status) }}</span></div>
       {% else %}<p class="note">No other sources yet.</p>{% endfor %}
     </section>
     {% endif %}

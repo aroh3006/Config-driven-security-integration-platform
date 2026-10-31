@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block head %}<meta http-equiv="refresh" content="10">{% endblock %}
+{% block full_title %}Otto{% endblock %}
+{% block before_shell %}
+<div class="landing">
+  <div class="landing-word" aria-hidden="true">OTTO</div>
+
+  <header class="landing-top">
+    <span class="landing-brand">Otto</span>
+    <a class="landing-plug" href="/ui/add">Plug in a source</a>
+  </header>
+
+  <div class="landing-main">
+    <section class="landing-copy">
+      <span class="label">[ Config-driven · security integration ]</span>
+      <h1>Any tool.<br>One config.</h1>
+      <p>One engine pulls users, devices and alerts from every security tool. A new source is a config file, not new code.</p>
+    </section>
+
+    <section class="diagram" aria-label="Five sources feed one engine, which writes users, devices and alerts">
+      <svg viewBox="0 0 780 436" aria-hidden="true" focusable="false">
+        {% for d in cables_in %}
+        <path class="d-cable teal" d="{{ d }}"/>
+        <path class="d-pulse" d="{{ d }}"/>
+        {% endfor %}
+        <path class="d-cable slot" d="M160 412 C 235 412, 235 270, 310 270"/>
+        {% for d in cables_out %}
+        <path class="d-cable white" d="{{ d }}"/>
+        <path class="d-pulse out" d="{{ d }}"/>
+        {% endfor %}
+      </svg>
+      {% for name, detail, top in sources %}
+      <div class="d-socket" style="top: {{ top }}px">
+        <i class="d-ring" aria-hidden="true"></i>
+        <span><b>{{ name }}</b><small>{{ detail }}</small></span>
+      </div>
+      {% endfor %}
+      <a class="d-socket d-slot" href="/ui/add" style="top: 388px"><span aria-hidden="true">+</span>Plug in a new source</a>
+      <div class="d-engine">
+        <span class="eyebrow">The engine</span>
+        <b>Same rules for every source</b>
+        <div class="d-chips">{% for chip in chips %}<span>{{ chip }}</span>{% endfor %}</div>
+      </div>
+      {% for label, top in outputs %}
+      <a class="d-output" href="/ui/records/{{ label }}" style="top: {{ top }}px">{{ label }}<i aria-hidden="true"></i></a>
+      {% endfor %}
+    </section>
+  </div>
+
+  <footer class="landing-strip">
+    <div><span>Configuration</span><b>1 YAML file per source</b></div>
+    <div><span>Sources</span><b>{{ configured }} configured</b></div>
+    <div><span>Failure handling</span><b>Retry · rate limit · quarantine</b></div>
+    <div><span>Common schema</span><b>Users · devices · alerts</b></div>
+    <span class="landing-scroll">Scroll for the workspace ↓</span>
+  </footer>
+</div>
+<div class="flip-runway" aria-hidden="true"></div>
+<span id="workspace"></span>
+{% endblock %}
+{% block content %}{% include "_workspace.html" %}{% endblock %}

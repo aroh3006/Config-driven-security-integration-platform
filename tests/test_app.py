@@ -251,7 +251,7 @@ def test_pages_load_empty(client, path):
 
 def test_health_page_shows_row_and_stub_banner(client, demo):
     client.post(f"/connectors/{demo}/run")
-    page = client.get("/").text
+    page = client.get("/ui/health").text
     assert "demo" in page and "healthy" in page
     assert 'http-equiv="refresh" content="10"' in page
     if engine.stubbed_functions():
@@ -264,7 +264,7 @@ def test_web_actions_redirect_and_work(client, demo):
     assert db.last_run(demo)["status"] == "success"
     client.post(f"/ui/connector/{demo}/pause")
     assert db.get_connector(demo)["enabled"] == 0
-    assert "Resume" in client.get("/").text
+    assert "Resume" in client.get("/ui/health").text
     client.post(f"/ui/connector/{demo}/resume")
     assert db.get_connector(demo)["enabled"] == 1
     assert client.post(f"/ui/connector/{demo}/nope").status_code == 404

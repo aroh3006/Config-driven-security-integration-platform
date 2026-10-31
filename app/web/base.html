@@ -4,11 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 {% block head %}{% endblock %}
-<title>{% block title %}Home{% endblock %} · Otto</title>
+<title>{% block full_title %}{% block title %}Home{% endblock %} · Otto{% endblock %}</title>
 <link rel="stylesheet" href="/static/otto.css?v={{ css_version }}">
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
+{% block before_shell %}{% endblock %}
 <div class="shell">
   <nav class="rail" aria-label="Main">
     <a class="logo" href="/" aria-label="Otto home">{{ icon("logo") }}</a>

@@ -53,6 +53,7 @@ def snapshot(name: str) -> dict[str, Any]:
         "seconds": entry.get("seconds") if waiting else None,
         "reason": entry.get("reason") if waiting else None,
         "resumes_at": time.strftime("%H:%M:%S", time.gmtime(until)) if waiting else None,
+        "began_at": time.strftime("%H:%M:%S", time.gmtime(until - entry["seconds"])) if waiting else None,
         "remaining": max(int(until - now), 1) if waiting else 0,
     }
 

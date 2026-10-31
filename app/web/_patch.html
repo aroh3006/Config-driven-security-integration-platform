@@ -7,7 +7,7 @@
       <span class="socket-text"><b title="{{ s.name }}">{{ s.name }}</b><small class="t-{{ s.tone }}" title="{{ s.detail }}">{{ s.status }} · {{ s.detail }}</small></span>
     </a>
     {% endfor %}
-    {% if p.more %}<a class="socket more" href="/#health">+{{ p.more }} more</a>{% endif %}
+    {% if p.more %}<a class="socket more" href="/ui/health#health">+{{ p.more }} more</a>{% endif %}
     {% if p.slot %}<a class="socket ghost" href="/ui/add"><span aria-hidden="true">+</span> Plug in a new source</a>{% endif %}
   </div>
   <div class="cables">

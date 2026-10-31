@@ -174,11 +174,12 @@ def test_common_schema_values_are_clean(run):
     assert any(row["cve"] for row in rows)
 
 
-def test_device_file_source_quarantines_the_row_with_no_id(run, monkeypatch):
+def test_device_file_source_loads_every_row(run, monkeypatch):
     monkeypatch.chdir(REPO_CONFIGS.parent)
     result = run("devices-file")
-    assert (result.status, result.records_pulled, result.records_bad) == ("partial", 12, 1)
-    assert db.count_records("device", "devices-file") == 11
+    assert (result.status, result.records_pulled, result.records_bad) == ("success", 12, 0)
+    assert db.count_records("device", "devices-file") == 12
+    assert db.get_connector("devices-file")["status"] == "healthy"
 
 
 def test_rerun_does_not_duplicate(run):
@@ -319,7 +320,7 @@ def test_web_app_on_the_real_engine(monkeypatch, config_folder, mock_transport):
 
     with TestClient(create_app()) as client:
         assert db.get_connector("cisa-kev")["approved_hash"]
-        page = client.get("/").text
+        page = client.get("/ui/health").text
         assert "Engine stubs active" not in page
         assert "cisa-kev" in page
 
@@ -329,6 +330,6 @@ def test_web_app_on_the_real_engine(monkeypatch, config_folder, mock_transport):
         assert "Draft made from your sample" in filled.text
 
         assert client.post("/connectors/cisa-kev/pause").json()["status"] == "paused"
-        assert "Resume" in client.get("/").text
+        assert "Resume" in client.get("/ui/health").text
         assert client.post("/faults", json={"connector": "cisa-kev", "mode": "503x3"}).status_code == 200
         assert client.post("/faults", json={"connector": "cisa-kev", "mode": "off"}).status_code == 200

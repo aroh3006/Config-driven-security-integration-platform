@@ -138,7 +138,7 @@ def test_sidebar_search_filters_rows_not_totals():
 
 def test_every_rail_link_has_a_label_and_works(client):
     add(client, "demo")
-    page = client.get("/").text
+    page = client.get("/ui/health").text
     for _, label, href in sidebar.RAIL:
         assert f'aria-label="{label}"' in page
         assert client.get(href).status_code == 200, href
@@ -214,8 +214,8 @@ def test_output_totals_add_up():
 
 def test_home_page_draws_the_panel(client):
     add(client, "demo")
-    page = client.get("/").text
-    assert "hero-word" not in page and "<svg" in page
+    page = client.get("/ui/health").text
+    assert "CONNECT" not in page and "hero-word" not in page and "<svg" in page
     assert "Any tool" not in page and "One engine pulls" not in page
     assert "Plug in a new source" in page
     assert 'http-equiv="refresh" content="10"' in page
@@ -224,11 +224,68 @@ def test_home_page_draws_the_panel(client):
 def test_home_shows_more_link_for_many_connectors(client):
     for n in range(9):
         add(client, f"src{n}")
-    assert "+3 more" in client.get("/").text
+    assert "+3 more" in client.get("/ui/health").text
 
 
 def test_home_with_no_connectors_still_renders(client):
     assert client.get("/").status_code == 200
+
+
+# Landing page
+
+def landing_part(page):
+    return page[page.index('class="landing"') : page.index('id="workspace"')]
+
+
+def test_landing_comes_first_then_the_workspace_below(client):
+    page = client.get("/").text
+    assert page.index('class="landing"') < page.index('id="workspace"') < page.index('class="rail"')
+    assert 'class="side"' in page and "[ Connection health ]" in page
+    assert "<title>Otto</title>" in page
+    assert "<script" not in page
+
+
+def test_landing_has_otto_branding_and_no_workspace_button(client):
+    landing = landing_part(client.get("/").text)
+    assert ">OTTO<" in landing and "CONNECT" not in landing
+    assert ">Otto<" in landing
+    assert "Any tool." in landing and "One config." in landing
+    assert "Open workspace" not in client.get("/").text
+    assert "Scroll for the workspace" in landing
+
+
+def test_landing_has_the_five_sources_and_links_onward(client):
+    landing = landing_part(client.get("/").text)
+    for name in ("Okta", "GitHub", "Jira", "NVD", "CISA KEV"):
+        assert f"<b>{name}</b>" in landing
+    assert 'href="/ui/add"' in landing
+    assert 'href="/ui/records/alerts"' in landing
+
+
+def test_landing_counts_real_connectors(client):
+    assert "0 configured" in client.get("/").text
+    add(client, "demo")
+    assert "1 configured" in client.get("/").text
+
+
+def test_landing_only_claims_what_is_true(client):
+    add(client, "demo")
+    landing = landing_part(client.get("/").text).lower()
+    assert "connected" not in landing
+    assert "drag" not in landing
+
+
+def test_home_workspace_works_like_the_health_page(client):
+    add(client, "demo")
+    client.post("/connectors/demo/pause")
+    page = client.get("/").text
+    assert "Resume" in page and 'http-equiv="refresh" content="10"' in page
+    assert client.get("/", params={"find": "zzz"}).text.count("No source matches") == 1
+    assert 'action="/#workspace"' in page
+
+
+def test_page_has_one_main_landmark(client):
+    assert client.get("/").text.count("<main") == 1
 
 
 # Connector page and config taken apart
@@ -303,7 +360,7 @@ def test_configs_page_links_to_take_apart(client):
 # Remaining pages
 
 ALL_PAGES = (
-    "/", "/ui/add", "/ui/configs", "/ui/quarantine", "/ui/records/users", "/ui/records/devices", "/ui/records/alerts",
+    "/ui/health", "/ui/add", "/ui/configs", "/ui/quarantine", "/ui/records/users", "/ui/records/devices", "/ui/records/alerts",
     "/ui/people", "/ui/kev", "/ui/demo", "/ui/audit", "/ui/connector/demo", "/ui/connector/demo/config", "/ui/live/demo",
 )
 
@@ -435,7 +492,20 @@ def test_every_status_uses_one_colour_on_every_surface(client):
 
 
 def test_no_giant_background_words_come_back():
+    # The landing page's OTTO mark is the only one allowed.
     templates = Path(__file__).resolve().parent.parent / "app" / "web"
-    assert "cqw" not in CSS and "-word {" not in CSS
+    assert "-word {" not in CSS.replace(".landing-word {", "")
     for path in templates.glob("*.html"):
-        assert '-word"' not in path.read_text(encoding="utf-8"), path.name
+        assert '-word"' not in path.read_text(encoding="utf-8").replace('landing-word"', ""), path.name
+
+
+def test_page_turn_is_css_only_and_can_be_skipped():
+    assert "animation-timeline: scroll(root)" in CSS
+    assert "@supports (animation-timeline: scroll())" in CSS
+    assert "prefers-reduced-motion: no-preference" in CSS
+
+
+def test_page_turn_runway_is_only_on_home(client):
+    add(client, "demo")
+    assert 'class="flip-runway"' in client.get("/").text
+    assert 'class="flip-runway"' not in client.get("/ui/health").text

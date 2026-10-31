@@ -55,6 +55,29 @@ HOME_ENGINE = {
 }
 
 
+# The landing page shows how sources plug in. It is a picture of the product, not live status.
+LANDING_SOURCES = (
+    ("Okta", "API token · cursor", 0),
+    ("GitHub", "Bearer · page link", 74),
+    ("Jira", "Basic · page token", 148),
+    ("NVD", "API key · offset", 222),
+    ("CISA KEV", "No login · one file", 296),
+)
+LANDING_CABLES_IN = (
+    "M160 24 C 235 24, 235 118, 310 118",
+    "M160 98 C 235 98, 235 148, 310 148",
+    "M160 172 C 235 172, 235 178, 310 178",
+    "M160 246 C 235 246, 235 208, 310 208",
+    "M160 320 C 235 320, 235 238, 310 238",
+)
+LANDING_CABLES_OUT = (
+    "M530 138 C 580 138, 580 74, 630 74",
+    "M530 178 C 580 178, 580 148, 630 148",
+    "M530 218 C 580 218, 580 222, 630 222",
+)
+LANDING_OUTPUTS = (("users", 50), ("devices", 124), ("alerts", 198))
+
+
 def _spawn(target: Callable[[], None]) -> None:
     """Start a long run on its own thread. A closed browser tab cannot cancel it."""
     threading.Thread(target=target, daemon=True).start()
@@ -79,6 +102,15 @@ def _render(
 
 def _redirect(path: str, msg: str) -> RedirectResponse:
     return RedirectResponse(f"{path}?msg={quote(msg)}", status_code=303)
+
+
+def _can_run(connector: dict[str, Any]) -> bool:
+    """True when nothing would stop a scenario before it reached the source."""
+    return (
+        connector["status"] != "paused"
+        and connector["approved_hash"] == connector["config_hash"]
+        and not engine.missing_secrets(connector["config_yaml"])
+    )
 
 
 def _pretty(value: Any) -> str:
@@ -143,11 +175,31 @@ def build_router(
 
     @router.get("/", response_class=HTMLResponse)
     def health_page(request: Request) -> HTMLResponse:
+        """The landing screen, with the workspace below it. Scrolling down reaches it."""
+        rows = health.health_rows()
+        return _render(
+            request,
+            "home.html",
+            nav="health",
+            rows=rows,
+            p=patch.build(rows),
+            engine=HOME_ENGINE,
+            healthy=sum(1 for row in rows if row["status"] == "healthy"),
+            configured=len(rows),
+            sources=LANDING_SOURCES,
+            cables_in=LANDING_CABLES_IN,
+            cables_out=LANDING_CABLES_OUT,
+            outputs=LANDING_OUTPUTS,
+            chips=HOME_ENGINE["chips"],
+        )
+
+    @router.get("/ui/health", response_class=HTMLResponse)
+    def health_table_page(request: Request) -> HTMLResponse:
         rows = health.health_rows()
         return _render(
             request,
             "health.html",
-            nav="home",
+            nav="health",
             rows=rows,
             p=patch.build(rows),
             engine=HOME_ENGINE,
@@ -179,9 +231,14 @@ def build_router(
         rows = health.health_rows()
         if not rows:
             return _redirect("/ui/add", "Add a source first")
-        api_rows = [row for row in rows if not scenarios.is_file_source(db.get_connector(row["name"]))]
-        worst = patch.choose(api_rows or rows, 1)[0]["name"]
-        return RedirectResponse(f"/ui/live/{quote(worst)}", status_code=303)
+        # A source that cannot run has nothing to show here. Health still lists it.
+        ready = [row for row in rows if _can_run(db.get_connector(row["name"]))] or rows
+        # Network scenarios are blocked on a file source. Prefer one that can show them.
+        ready = [row for row in ready if not scenarios.is_file_source(db.get_connector(row["name"]))] or ready
+        first = patch.choose(ready, 1)[0]
+        if theme.tone(first["status"]) == "teal":
+            first = patch.choose(ready, 1, healthy_first=True)[0]
+        return RedirectResponse(f"/ui/live/{quote(first['name'])}", status_code=303)
 
     @router.get("/ui/live/{name}", response_class=HTMLResponse)
     def live_page(request: Request, name: str) -> HTMLResponse:
@@ -193,10 +250,8 @@ def build_router(
         state = live.snapshot(name)
         view = scenarios.build(name, connector, rows, state)
         shown = [dict(item) for item in rows]
-        if state["waiting"]:
-            next(item for item in shown if item["name"] == name)["status"] = "waiting"
-        elif state["active"]:
-            next(item for item in shown if item["name"] == name)["status"] = "running"
+        head_status = "waiting" if state["waiting"] else "running" if state["active"] else row["status"]
+        next(item for item in shown if item["name"] == name)["status"] = head_status
         tray = None
         if view["kind"] == "bad_record":
             tray = {"href": "/ui/quarantine", "count": view["quarantine_total"]}
@@ -207,11 +262,12 @@ def build_router(
             current=name,
             connector=connector,
             row=row,
+            head_status=head_status,
             view=view,
             scenarios=scenarios.for_connector(connector),
             file_source=scenarios.is_file_source(connector),
             refresh=state["active"] or (row["running"] and row["recent"]),
-            p=patch.build(shown, limit=4, focus=name, tag=view["status"]["tag"], show_slot=False),
+            p=patch.build(shown, limit=4, focus=name, tag=view["status"]["tag"], show_slot=False, healthy_first=True),
             engine={
                 "eyebrow": "Engine",
                 "title": view["status"]["engine"][0],
@@ -231,6 +287,13 @@ def build_router(
         scenario = scenarios.SCENARIOS.get(key)
         if scenario is None:
             raise HTTPException(400, f"unknown scenario {key!r}")
+        missing = engine.missing_secrets(connector["config_yaml"])
+        twin = db.get_connector(f"mock-{name}") if missing else None
+        note = None
+        if twin is not None:
+            note = f"{name} has no keys yet, so this ran on {twin['name']}, which uses fake data."
+            name, connector = twin["name"], twin
+            missing = engine.missing_secrets(connector["config_yaml"])
         back = f"/ui/live/{quote(name)}"
         if scenarios.for_connector(connector)[key]["blocked"]:
             return _redirect(back, f"{name} reads a local file, so it makes no web requests to fail. Pick an API source.")
@@ -238,13 +301,16 @@ def build_router(
             return _redirect(back, f"{name} is paused. Resume it to run a scenario.")
         if connector["approved_hash"] != connector["config_hash"]:
             return _redirect(back, f"{name} has a changed config. Approve it to run a scenario.")
+        if missing:
+            needed = ", ".join(missing)
+            return _redirect(back, f"Nothing ran. {name} needs {needed} in .env. Add it, then restart Otto.")
         if not live.begin(name, key):
             return _redirect(back, f"{name} is already running. Wait for it to finish.")
         mode = None if scenario["mode"] == "off" else scenario["mode"]
         engine.clear_fault(name)
         db.audit(ACTOR, "scenario.start", name, key)
         _spawn(lambda: tracked_run(name, mode))
-        return RedirectResponse(back, status_code=303)
+        return _redirect(back, note) if note else RedirectResponse(back, status_code=303)
 
     @router.get("/ui/configs", response_class=HTMLResponse)
     def configs_page(request: Request) -> HTMLResponse:
@@ -273,7 +339,7 @@ def build_router(
     ) -> Response:
         if db.get_connector(name) is None:
             raise HTTPException(404, f"unknown connector {name!r}")
-        back = "/"
+        back = "/ui/health"
         if action == "test":
             return connector_page(request, name, test=_test_view(engine.test_connection(name)))
         if action == "run":

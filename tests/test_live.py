@@ -10,13 +10,14 @@ import pytest
 from fastapi.testclient import TestClient
 
 import engine
-from app import connectors, engine_client, live, pages, runlog, scenarios
+from app import connectors, engine_client, live, pages, patch, runlog, scenarios
 from app.api import create_app
 from engine import faults
 from engine import http as engine_http
 from engine import runner as engine_runner
+from mock_server import __main__ as mock_main
 from mock_server import app as mock_app
-from mock_server import saas
+from mock_server import data, saas
 from store import db
 
 REPO_CONFIGS = Path(__file__).resolve().parent.parent / "configs"
@@ -299,6 +300,124 @@ def test_rejected_login_behind_a_200_is_explained(client, monkeypatch):
     assert "wrong-value-123" not in page
 
 
+@pytest.mark.parametrize("scenario", sorted(scenarios.SCENARIOS))
+def test_scenario_refused_when_a_secret_is_missing(client, monkeypatch, scenario):
+    monkeypatch.setenv("MOCK_JIRA_EMAIL", "")
+    monkeypatch.setenv("MOCK_JIRA_TOKEN", "")
+    page = press(client, "mock-jira-tickets", scenario).text
+    assert "Nothing ran. mock-jira-tickets needs MOCK_JIRA_EMAIL, MOCK_JIRA_TOKEN in .env." in page
+    assert db.last_run("mock-jira-tickets") is None
+    assert faults.list_faults() == {}
+    assert live.snapshot("mock-jira-tickets")["active"] is False
+
+
+def test_scenario_names_only_the_secret_that_is_missing(client, monkeypatch):
+    monkeypatch.setenv("MOCK_JIRA_EMAIL", "")
+    page = press(client, "mock-jira-tickets", "healthy").text
+    assert "needs MOCK_JIRA_EMAIL in .env" in page
+    assert saas.JIRA_TOKEN not in page
+
+
+def test_source_with_no_keys_runs_on_its_mock_twin(client, monkeypatch):
+    monkeypatch.setenv("JIRA_EMAIL", "")
+    monkeypatch.setenv("JIRA_TOKEN", "")
+    text = (REPO_CONFIGS / "jira-tickets.yaml").read_text(encoding="utf-8")
+    assert connectors.save_and_approve(text, "test") == []
+    reply = client.post("/ui/live/jira-tickets/scenario", data={"scenario": "healthy"}, follow_redirects=False)
+    assert reply.headers["location"].startswith("/ui/live/mock-jira-tickets?")
+    page = client.get(reply.headers["location"]).text
+    assert "jira-tickets has no keys yet, so this ran on mock-jira-tickets, which uses fake data." in page
+    assert db.last_run("jira-tickets") is None
+    assert db.last_run("mock-jira-tickets")["status"] != "auth_failed"
+
+
+def test_live_entry_skips_a_source_that_cannot_run(client, monkeypatch):
+    press(client, "mock-okta-users", "healthy")
+    press(client, "mock-jira-tickets", "wrong_key")
+    monkeypatch.setenv("MOCK_JIRA_EMAIL", "")
+    reply = client.get("/ui/live", follow_redirects=False)
+    assert reply.headers["location"] == "/ui/live/mock-okta-users"
+
+
+def test_page_during_a_rate_limit_wait_tells_the_whole_story(client):
+    db.save_connector("mock-okta-users", "user", db.get_connector("mock-okta-users")["config_yaml"], db.get_connector("mock-okta-users")["approved_hash"])
+    live.begin("mock-okta-users", "rate_limit")
+    live.note_wait("mock-okta-users", 30, "rate limit")
+    page = client.get("/ui/live/mock-okta-users").text
+    assert "Slowed down: rate limit" in page
+    assert "Got 429. Told to wait 30 s" in page and "Will fetch that page again" in page
+    assert "No request log" not in page
+    assert "NEXT PAGE · kept, nothing lost" in page
+    head = page[page.index('class="head-title"') : page.index('class="actions"')]
+    assert "waiting" in head and "healthy" not in head
+    live.reset()
+
+
+def test_connections_card_shows_counts_and_known_sources_first(client):
+    press(client, "mock-okta-users", "healthy")
+    page = client.get("/ui/live/mock-jira-tickets").text
+    card = page[page.index("[ Connections · now ]") :]
+    assert "mock-okta-users" in card and "119 users" in card
+
+
+def test_missing_secret_does_not_claim_a_401(client, wired, monkeypatch):
+    monkeypatch.setenv("MOCK_JIRA_EMAIL", "")
+    wired("mock-jira-tickets")
+    page = client.get("/ui/live/mock-jira-tickets").text
+    assert "Failed: secret missing" in page
+    assert "no request sent" in page and "401" not in page
+    assert "Failed: login rejected" not in page and "a wrong key" not in page.lower()
+    assert "LOGIN · stopped before any data" in page
+
+
+def test_panel_shows_the_fault_then_healthy_sources(client):
+    rows = [
+        {"name": "watched", "status": "auth_failed", "mock": True},
+        {"name": "other-fault", "status": "failing", "mock": False},
+        {"name": "fine", "status": "healthy", "mock": True},
+        {"name": "fine-too", "status": "healthy", "mock": False},
+    ]
+    assert [row["name"] for row in patch.choose(rows, 3, "watched", healthy_first=True)] == ["watched", "fine-too", "fine"]
+    assert [row["name"] for row in patch.choose(rows, 3)][0] == "other-fault"
+
+
+def test_clean_mock_data_is_healthy_until_a_fault_is_pressed(config_folder, monkeypatch):
+    monkeypatch.setattr(data, "MESSY", False)
+    server = TestClient(mock_app.create_app(), base_url="http://localhost:9000")
+
+    def handle(request):
+        headers = {k: v for k, v in request.headers.items() if k.lower() != "host"}
+        reply = server.request(request.method, str(request.url.raw_path, "ascii"), headers=headers, content=request.content)
+        kept = [(k, v) for k, v in reply.headers.multi_items() if k.lower() != "content-encoding"]
+        return httpx.Response(reply.status_code, headers=kept, content=reply.content)
+
+    monkeypatch.setenv("MOCK_OKTA_KEY", saas.OKTA_KEY)
+    monkeypatch.setattr(engine.memstore, "_default_store", db)
+    text = (REPO_CONFIGS / "mock-okta-users.yaml").read_text(encoding="utf-8")
+    assert connectors.save_and_approve(text, "test") == []
+    options = {"store": db, "transport": httpx.MockTransport(handle), "sleeper": lambda _: None, "resolver": lambda _: ["127.0.0.1"]}
+
+    clean = engine.run_connector("mock-okta-users", **options)
+    assert (clean.status, clean.records_bad) == ("success", 0)
+    assert db.get_connector("mock-okta-users")["status"] == "healthy"
+
+    faults.set_fault("mock-okta-users", "badrecord")
+    assert engine.run_connector("mock-okta-users", **options).records_bad == 1
+    faults._faults.clear()
+
+
+def test_running_server_is_clean_unless_asked(monkeypatch, tmp_path):
+    monkeypatch.setattr(data, "MESSY", True)
+    monkeypatch.setattr(mock_main.uvicorn, "run", lambda *_, **__: None)
+    monkeypatch.setattr(mock_main.Path, "write_text", lambda *_, **__: 0)
+    monkeypatch.setattr(mock_main.sys, "argv", ["mock_server"])
+    mock_main.main()
+    assert data.MESSY is False
+    monkeypatch.setattr(mock_main.sys, "argv", ["mock_server", "--messy"])
+    mock_main.main()
+    assert data.MESSY is True
+
+
 def test_bad_record_scenario_shows_the_broken_record(client):
     page = press(client, "mock-okta-users", "bad_record").text
     assert "[ One broken record, labelled ]" in page
@@ -306,6 +425,14 @@ def test_bad_record_scenario_shows_the_broken_record(client):
     assert "[ Quarantine · " in page
     assert "REPLAY · after a fix" in page
     assert 'class="tray"' in page
+
+
+def test_empty_field_on_a_broken_record_is_not_called_ok():
+    config = {"map": {"id": "id", "email": "profile.login", "status": "status"}}
+    item = {"raw_json": '{"status": "ACTIVE"}', "reason": "missing required field 'id' (path id)"}
+    tags = [row["tag"] for row in scenarios._record_rows(config, item)]
+    assert "ID · set aside" in tags and "EMAIL · empty" in tags and "STATUS · ok" in tags
+    assert "EMAIL · ok" not in tags
 
 
 def test_pressing_healthy_clears_a_failure(client):
@@ -465,3 +592,22 @@ def test_live_menu_opens_an_api_source_even_when_a_file_source_is_worst(with_fil
     monkeypatch.setattr(pages.patch, "choose", lambda rows, limit: rows[:limit])
     target = with_file_source.get("/ui/live", follow_redirects=False).headers["location"]
     assert "devices-file" not in target
+
+
+def test_live_menu_opens_a_file_source_when_nothing_else_can_run(with_file_source, monkeypatch):
+    monkeypatch.setenv("MOCK_OKTA_KEY", "")
+    monkeypatch.setenv("MOCK_JIRA_EMAIL", "")
+    target = with_file_source.get("/ui/live", follow_redirects=False).headers["location"]
+    assert target == "/ui/live/devices-file"
+
+
+def test_fault_scenario_on_a_source_with_no_keys_lands_on_its_mock_twin(client, monkeypatch):
+    monkeypatch.setenv("JIRA_EMAIL", "")
+    monkeypatch.setenv("JIRA_TOKEN", "")
+    text = (REPO_CONFIGS / "jira-tickets.yaml").read_text(encoding="utf-8")
+    assert connectors.save_and_approve(text, "test") == []
+    page = press(client, "jira-tickets", "wrong_key").text
+    assert "this ran on mock-jira-tickets" in page
+    assert db.last_run("jira-tickets") is None
+    assert db.last_run("mock-jira-tickets")["status"] == "auth_failed"
+    assert faults._faults == {}

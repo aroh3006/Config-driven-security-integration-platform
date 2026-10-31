@@ -11,6 +11,7 @@ from urllib.parse import urlsplit
 
 import yaml
 
+from app.patch import calm_order
 from app.theme import tone
 from store import db
 
@@ -118,7 +119,7 @@ def classify(run: dict[str, Any] | None, requests: list[dict[str, Any]], state: 
     if run["status"] == "running":
         return "running"
     if run["status"] == "auth_failed":
-        return "auth"
+        return "secret_missing" if "is not set" in (run["last_error"] or "") else "auth"
     if run["status"] == "failed":
         return "timeout" if any(entry["status"] is None and not _is_token(entry) for entry in requests) else "failed"
     if any(entry["status"] == 429 for entry in requests):
@@ -233,6 +234,16 @@ def _trim_timeline(lines: list[dict[str, str]]) -> list[dict[str, str]]:
     return kept
 
 
+def _wait_lines(state: dict[str, Any]) -> list[dict[str, str]]:
+    """The saved log only exists once a run ends. A wait is known before that."""
+    wait = _seconds(state["seconds"])
+    if state["reason"] == "rate limit":
+        first = {"at": state["began_at"], "text": f"Got 429. Told to wait {wait}", "tone": "amber"}
+    else:
+        first = {"at": state["began_at"], "text": f"No good answer. Retry in {wait}", "tone": "red"}
+    return [first, {"at": state["resumes_at"], "text": "Will fetch that page again", "tone": ""}]
+
+
 def _spec_path(spec: Any) -> str | None:
     if isinstance(spec, str):
         return spec
@@ -257,6 +268,8 @@ def _record_rows(config: dict[str, Any], item: dict[str, Any]) -> list[dict[str,
         shown = "(missing)" if value is None else str(value)[:60]
         if f"'{target}'" in reason:
             rows.append({"code": f"{path}: {shown}", "tag": f"{target.upper()} · set aside", "tone": "amber"})
+        elif value is None:
+            rows.append({"code": f"{path}: {shown}", "tag": f"{target.upper()} · empty", "tone": ""})
         else:
             rows.append({"code": f"{path}: {shown}", "tag": f"{target.upper()} · ok", "tone": "teal"})
     rows.append({"code": "raw record kept in quarantine", "tag": "REPLAY · after a fix", "tone": ""})
@@ -340,6 +353,20 @@ def _copy(kind: str, name: str, run: dict[str, Any] | None, state: dict[str, Any
                 "The login was rejected",
                 "Retrying a wrong key only risks locking the account. Otto stops at once and marks the connection auth_failed.",
                 ("Auth plugin", "Health view", "Alerts"),
+            ),
+        }
+    if kind == "secret_missing":
+        return {
+            "title": "Failed: secret missing",
+            "tone": "red",
+            "line": f"No request sent · {failures} failed in a row",
+            "detail": error or "A secret is not set.",
+            "engine": (f"{name} stopped", "A secret is not set"),
+            "tag": {"text": "no request sent", "tone": "red"},
+            "caption": (
+                "A secret is not set",
+                "Otto stopped before calling the source, so nothing was tried. Set the secret and run again.",
+                ("Secrets", "Health view", "Alerts"),
             ),
         }
     if kind == "failed":
@@ -451,7 +478,7 @@ def build(name: str, connector: dict[str, Any], rows: list[dict[str, Any]], stat
     copy = _copy(kind, name, run, state, connector)
     quarantined = [item for item in db.list_quarantine(name, limit=50) if run and item["run_id"] == run["id"]]
 
-    # Mock sources always hold a few broken records. After a plain healthy run the
+    # A source can hold broken records of its own. After a plain healthy run the
     # page still shows the request. The status card reports what was set aside.
     healthy_press = not state["active"] and kind == "bad_record" and state.get("scenario") == "healthy"
     heading = "[ The request, labelled ]"
@@ -472,7 +499,8 @@ def build(name: str, connector: dict[str, Any], rows: list[dict[str, Any]], stat
                 request_rows.append(
                     {"code": f"{request.get('method', 'GET')} {request['path']}", "tag": "ADDRESS · from the config", "tone": ""}
                 )
-        request_rows.append(_login_row(config))
+        if kind != "secret_missing":
+            request_rows.append(_login_row(config))
         if state["waiting"] and state["reason"] == "rate limit":
             request_rows.append(
                 {
@@ -482,9 +510,9 @@ def build(name: str, connector: dict[str, Any], rows: list[dict[str, Any]], stat
                 }
             )
         request_rows.extend(_event_rows(requests, run["status"] if run else None))
-        if kind == "auth" and not any(entry["status"] in (401, 403) for entry in calls) and run and run["last_error"]:
+        if kind in ("auth", "secret_missing") and not any(entry["status"] in (401, 403) for entry in calls) and run and run["last_error"]:
             request_rows.append({"code": run["last_error"], "tag": "LOGIN · stopped before any data", "tone": "red"})
-        if connector["consecutive_failures"] and kind in ("auth", "timeout", "failed"):
+        if connector["consecutive_failures"] and kind in ("auth", "secret_missing", "timeout", "failed"):
             alert = _alert(name, connector, config, run)
             tag = "ALERT · message sent" if alert["sent"] else "ALERT · not sent yet"
             request_rows.append(
@@ -494,7 +522,9 @@ def build(name: str, connector: dict[str, Any], rows: list[dict[str, Any]], stat
         if checkpoint["resume_state"] and kind in ("timeout", "failed", "partial"):
             request_rows.append({"code": "checkpoint saved", "tag": "NEXT RUN · resumes here", "tone": "teal"})
         paging = (config.get("pagination") or {}).get("type")
-        if run and paging and paging != "none" and run["pages"]:
+        if state["waiting"] and paging and paging != "none":
+            request_rows.append({"code": f"pagination: {paging}", "tag": "NEXT PAGE · kept, nothing lost", "tone": ""})
+        elif run and paging and paging != "none" and run["pages"]:
             pages = run["pages"]
             request_rows.append(
                 {"code": f"pagination: {paging}", "tag": f"NEXT PAGE · {pages} page{'s' if pages != 1 else ''} fetched", "tone": ""}
@@ -508,7 +538,7 @@ def build(name: str, connector: dict[str, Any], rows: list[dict[str, Any]], stat
                 {"code": f"{first_map[1]} → {first_map[0]}", "tag": f"MAPPING · into {connector['entity']}s", "tone": ""}
             )
 
-    peers = sorted((row for row in rows if row["name"] != name), key=lambda row: tone(row["status"]) == "teal")
+    peers = sorted((row for row in rows if row["name"] != name), key=calm_order)
     run_label = f"run {_time(run['started_at'])[:5]}" if run else "no runs"
     page_label = f" · page {run['pages']}" if run and run["pages"] else ""
     if state["active"]:
@@ -523,8 +553,8 @@ def build(name: str, connector: dict[str, Any], rows: list[dict[str, Any]], stat
         "pill": pill,
         "heading": heading,
         "request_rows": request_rows,
-        "timeline": _timeline(run, requests),
-        "alert": _alert(name, connector, config, run) if kind in ("auth", "timeout", "failed") else None,
+        "timeline": _wait_lines(state) if state["waiting"] else _timeline(run, requests),
+        "alert": _alert(name, connector, config, run) if kind in ("auth", "secret_missing", "timeout", "failed") else None,
         "quarantine": quarantined[:QUARANTINE_LIMIT],
         "quarantine_total": len(quarantined),
         "peers": peers[:PEER_LIMIT],
