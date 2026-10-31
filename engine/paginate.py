@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import copy
 from typing import Any, Callable, Optional
-from urllib.parse import urljoin
+from urllib.parse import unquote_plus, urljoin, urlsplit, urlunsplit
 
 import httpx
 
@@ -59,6 +59,19 @@ def _with_param(req: PageReq, name: str, value: Any, where: str = "query") -> Pa
         params[name] = value
         new["params"] = params
     return new
+
+
+def without_query_param(req: Optional[PageReq], name: Optional[str]) -> Optional[PageReq]:
+    """Drop one query parameter from a page request's URL. The rest stays byte for byte.
+
+    Servers echo query auth into next-page links. The auth plugin adds it back on every
+    request. The key never needs to live in a page request or a checkpoint.
+    """
+    if not req or not name:
+        return req
+    parts = urlsplit(req["url"])
+    kept = [pair for pair in parts.query.split("&") if unquote_plus(pair.partition("=")[0]) != name]
+    return {**req, "url": urlunsplit(parts._replace(query="&".join(kept)))}
 
 
 @register("none")

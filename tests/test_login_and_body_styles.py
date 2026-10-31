@@ -3,6 +3,7 @@
 import base64
 import json
 import shutil
+from urllib.parse import quote
 
 import certifi
 import httpx
@@ -200,6 +201,27 @@ def test_session_login_config_mistakes_are_explained(extra, message):
     auth = "auth:\n  type: session_login\n  login_url: https://api.example.com/login\n" + extra
     problems = validate_config(config(auth))
     assert any(message in p["message"] for p in problems), problems
+
+
+def test_session_login_typo_gets_did_you_mean():
+    problems = validate_config(config(JSON_LOGIN.replace("token_path", "tokn_path")))
+    assert any(p["path"] == "auth.tokn_path" and "token_path" in p["hint"] for p in problems), problems
+
+
+def test_token_with_url_symbols_is_masked_in_the_request_log(runner):
+    token = "session+token/with=symbols"
+    auth = JSON_LOGIN.replace("send_header: x-session-auth", "send_param: sid")
+
+    def handler(req):
+        if req.url.path == "/login":
+            return httpx.Response(200, json={"token": token})
+        assert req.url.params["sid"] == token
+        return httpx.Response(200, json={"items": ROWS})
+
+    r = runner(config(auth), handler)
+    assert r.status == "success"
+    logged = json.dumps(r.requests)
+    assert "sid=***" in logged and token not in logged and quote(token, safe="") not in logged
 
 
 def test_login_url_must_be_an_allowed_host():

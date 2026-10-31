@@ -19,12 +19,12 @@ from typing import Any, Callable, Optional, Union
 
 from . import faults
 from .auth import make_auth
-from .config import Config, ConfigError, config_hash, load_config, validate_config
+from .config import TEMPLATE, Config, ConfigError, config_hash, load_config, validate_config
 from .errors import AuthFailed, EngineError, HttpError, MappingError, SecretMissing
 from .http import HttpClient, RunStats
 from .mapper import map_record, to_utc, unmapped_fields
 from .memstore import default_store, now_iso
-from .paginate import make_paginator
+from .paginate import make_paginator, without_query_param
 from .parse import BadLine, extract_records, get_path, parse_body, set_path
 from .secrets import mask, mask_obj
 from .security import safe_file_path
@@ -73,9 +73,6 @@ class RunResult:
 
 
 # ---------------------------------------------------------------- templates
-_TPL = re.compile(r"\{\{\s*(now|checkpoint)\s*(?:([+-])\s*(\d+)\s*([smhd]))?\s*\}\}")
-
-
 def render(obj: Any, checkpoint: Optional[str]) -> Any:
     """Replace {{now}}, {{now-24h}}, {{checkpoint}} in strings (no code, just substitution)."""
     if isinstance(obj, dict):
@@ -95,7 +92,7 @@ def render(obj: Any, checkpoint: Optional[str]) -> Any:
             t = t + delta if m.group(2) == "+" else t - delta
         return t.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    return _TPL.sub(sub, obj)
+    return TEMPLATE.sub(sub, obj)
 
 
 def _url(cfg: Config) -> str:
@@ -330,7 +327,7 @@ def _http_pages(cfg: Config, http: HttpClient, watermark, resume, limit_pages):
         parsed = parse_body(resp.content, cfg.request.format)
         _raise_reported_error(cfg, parsed)
         records = extract_records(parsed, cfg.request.records_path, cfg.request.format)
-        nxt = paginator.next(req, resp, parsed, records)
+        nxt = without_query_param(paginator.next(req, resp, parsed, records), http.auth.query_param)
         pages += 1
         yield {"records": records, "next": nxt}
         req = nxt
@@ -360,7 +357,7 @@ def _update_status(cfg: Config, result: RunResult, store) -> str:
     fails = int(row.get("consecutive_failures") or 0)
     if result.status in ("success", "partial"):
         fails = 0
-        # A partial run stopped early or set records aside, so it is never fully healthy.
+        # A partial run stopped early or set records aside. It is never fully healthy.
         status = "degraded" if (result.status == "partial" or result.records_bad or result.retries) else "healthy"
     elif result.status == "auth_failed":
         fails += 1

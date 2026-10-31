@@ -59,7 +59,7 @@ def _config(connector: dict[str, Any]) -> dict[str, Any]:
 
 
 def is_file_source(connector: dict[str, Any]) -> bool:
-    """A file source makes no web requests, so network faults have nothing to act on."""
+    """A file source makes no web requests. Network faults have nothing to act on."""
     source = _config(connector).get("source")
     return isinstance(source, dict) and source.get("type") == "file"
 

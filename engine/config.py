@@ -10,13 +10,14 @@ from __future__ import annotations
 import difflib
 import hashlib
 import re
-from typing import Annotated, Any, Literal, Optional, Union, get_args
-from urllib.parse import urlsplit
+from typing import Annotated, Any, Callable, Literal, Optional, Union, get_args
+from urllib.parse import parse_qsl, urlsplit
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Discriminator, Field, Tag, ValidationError, field_validator, model_validator
 
 from .errors import ConfigError
+from .secrets import SENSITIVE_NAME, env_name, has_secret, is_secret_name
 
 # ---------------------------------------------------------------- common schema
 ENTITY_FIELDS: dict[str, list[str]] = {
@@ -31,6 +32,10 @@ FIELD_ALIASES = {"user": {"last_seen": "last_login"}}  # some sources call this 
 TRANSFORMS = ["lower", "upper", "trim", "int", "float", "str", "to_utc"]
 SCHEDULE_RE = re.compile(r"^\s*(?:every\s+)?(\d+)\s*(s|sec|secs|seconds?|m|min|mins|minutes?|h|hr|hrs|hours?)\s*$", re.I)
 SECRET_REF = re.compile(r"\{secret:([a-z0-9_]+)\}")
+TEMPLATE = re.compile(r"\{\{\s*(now|checkpoint)\s*(?:([+-])\s*(\d+)\s*([smhd]))?\s*\}\}")
+URL_USERINFO = re.compile(r"[a-z][a-z0-9+.-]*://[^/?#]*@", re.I)
+# These match SENSITIVE_NAME but only describe a credential. Examples: secret_type, session_timeout.
+DESCRIPTIVE_NAME = re.compile(r"(type|name|status|count|limit|timeout|ttl|duration)s?$", re.I)
 
 
 class Strict(BaseModel):
@@ -373,20 +378,18 @@ class Config(Strict):
             out[target] = FieldSpec(path=spec) if isinstance(spec, str) else spec
         return out
 
-    def secret_names(self) -> list[str]:
+    def secret_fields(self) -> list[tuple[str, str]]:
+        """Every place that names a secret, as (config path, secret name)."""
         a = self.auth
-        names: list[str] = []
-        if isinstance(a, (ApiKeyAuth, BearerAuth)):
-            names.append(a.secret)
-        elif isinstance(a, BasicAuth):
-            names += [n for n in (a.username_secret, a.secret) if n]
-        elif isinstance(a, OAuth2ClientCredentials):
-            names += [a.client_id_secret, a.client_secret_secret]
-        elif isinstance(a, SessionLogin):
-            names += [n for n in (a.username_secret, a.password_secret) if n]
-            names += secret_refs([a.headers, a.params, a.body])
-        names += self.request.secret_headers.values()
-        return list(dict.fromkeys(names))
+        fields = [(f"auth.{key}", getattr(a, key)) for key in type(a).model_fields
+                  if key.endswith("secret") and getattr(a, key) is not None]
+        if isinstance(a, SessionLogin):
+            fields += [("auth", name) for name in secret_refs([a.headers, a.params, a.body])]
+        fields += [(f"request.secret_headers.{header}", name) for header, name in self.request.secret_headers.items()]
+        return fields
+
+    def secret_names(self) -> list[str]:
+        return list(dict.fromkeys(name for _, name in self.secret_fields()))
 
 
 def secret_refs(value: Any) -> list[str]:
@@ -428,7 +431,7 @@ _SECTION_MODELS: dict[str, type[BaseModel]] = {
     "auth_failure": AuthFailure,
 }
 _AUTH_MODELS = {get_args(m.model_fields["type"].annotation)[0]: m
-                for m in (NoAuth, ApiKeyAuth, BasicAuth, BearerAuth, OAuth2ClientCredentials)}
+                for m in (NoAuth, ApiKeyAuth, BasicAuth, BearerAuth, OAuth2ClientCredentials, SessionLogin)}
 _PAGING_MODELS = {get_args(m.model_fields["type"].annotation)[0]: m
                   for m in (NoPaging, LinkHeaderPaging, PageNumberPaging, OffsetPaging, BodyTokenPaging, BodyNextUrlPaging)}
 
@@ -501,10 +504,46 @@ def parse_yaml(yaml_text: str) -> dict:
     return data
 
 
+def _holds_credential(name: str, value: Any) -> bool:
+    """True when a sensitive name such as api_key carries a value typed into the config."""
+    if not SENSITIVE_NAME.search(name) or DESCRIPTIVE_NAME.search(name):
+        return False
+    if isinstance(value, bool) or value in (None, "", [], {}):
+        return False
+    return not (isinstance(value, str) and TEMPLATE.fullmatch(value.strip()))
+
+
+def _param_hint(param: str) -> str:
+    return f"use auth: {{ type: api_key, query_param: {param}, secret: my_secret_name }}"
+
+
+def _credential_checks(cfg: Config, err: Callable[..., None]) -> None:
+    """Configs hold names only. These errors never repeat a value. It may be a real credential."""
+    for path, name in cfg.secret_fields():
+        if not is_secret_name(name):
+            err(path, "this field must hold a secret name and not the credential itself",
+                "use a name like okta_key in auth or secret_headers and put the value in .env as OKTA_KEY")
+
+    auth_urls = {f"auth.{key}": getattr(cfg.auth, key) for key in type(cfg.auth).model_fields if key.endswith("_url")}
+    for path, url in {"source.base_url": cfg.source.base_url, "request.path": cfg.request.path, **auth_urls}.items():
+        if URL_USERINFO.match(url or ""):
+            err(path, "this URL must not hold credentials",
+                "remove them and set auth: { type: basic, username_secret: my_user, secret: my_password }")
+        for param, value in parse_qsl((url or "").partition("?")[2].partition("#")[0]):
+            if _holds_credential(param, value):
+                err(path, f"query parameter '{param}' in this URL must not hold a credential", _param_hint(param))
+
+    for header, value in cfg.request.headers.items():
+        if _holds_credential(header, value):
+            err(f"request.headers.{header}", f"header '{header}' must not hold a literal value",
+                f"use request.secret_headers: {{ {header}: my_secret_name }} or set auth")
+    for param, value in cfg.request.params.items():
+        if _holds_credential(param, value):
+            err(f"request.params.{param}", f"parameter '{param}' must not hold a literal value", _param_hint(param))
+
+
 def _semantic_checks(cfg: Config) -> list[dict]:
     """Checks that need the whole config: hosts, entity fields, paging vs format, secrets."""
-    from .secrets import env_name, has_secret
-
     out: list[dict] = []
     err = lambda p, m, h="": out.append({"path": p, "message": m, "hint": h, "level": "error"})  # noqa: E731
     warn = lambda p, m, h="": out.append({"path": p, "message": m, "hint": h, "level": "warning"})  # noqa: E731
@@ -552,8 +591,9 @@ def _semantic_checks(cfg: Config) -> list[dict]:
         elif r not in mapped:
             err(f"map.{r}", f"required field '{r}' has no mapping", f"add e.g. `{r}: <path in the record>`")
 
+    _credential_checks(cfg, err)
     for name in cfg.secret_names():
-        if not has_secret(name):
+        if is_secret_name(name) and not has_secret(name):
             warn("auth", f"secret '{name}' is not set yet", f"add {env_name(name)}=... to your .env file")
     if cfg.retry.delays_s and any(d < 0 for d in cfg.retry.delays_s):
         err("retry.delays_s", "delays must be positive numbers of seconds")

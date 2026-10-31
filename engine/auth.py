@@ -38,6 +38,11 @@ class AuthPlugin:
         self.auth = cfg.auth
         self.client: "HttpClient | None" = None
 
+    @property
+    def query_param(self) -> str | None:
+        """The query parameter apply() adds to every request. None for header styles."""
+        return None
+
     def bind(self, client: "HttpClient") -> None:
         self.client = client
 
@@ -58,6 +63,10 @@ class NoAuthPlugin(AuthPlugin):
 @register("api_key")
 class ApiKeyPlugin(AuthPlugin):
     auth: ApiKeyAuth
+
+    @property
+    def query_param(self) -> str | None:
+        return self.auth.query_param
 
     def apply(self, headers, params):
         value = self.auth.prefix + secrets.get_secret(self.auth.secret)
@@ -178,6 +187,10 @@ class SessionLoginPlugin(CachedTokenPlugin):
     def __init__(self, cfg: Config):
         super().__init__(cfg)
         self._cookie_session_open = False
+
+    @property
+    def query_param(self) -> str | None:
+        return self.auth.send_param
 
     def _login(self) -> Any:
         if self.client is None:

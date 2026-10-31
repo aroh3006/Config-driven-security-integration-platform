@@ -158,7 +158,7 @@ def build_router(
         """Run a connector and always mark it finished. Unused faults are cleared.
 
         A scenario's fault is set only for its own run. If a scheduled run holds the
-        connector, the fault comes off again so that run cannot take it, then we retry.
+        connector, the fault comes off again. That run cannot take it. Then we retry.
         """
         try:
             for _ in range(RUN_BUSY_TRIES if mode else 1):
