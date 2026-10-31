@@ -125,8 +125,19 @@ def _describe(spec: FieldSpec) -> str:
     return "const"
 
 
+def _reject_object(target: str, value: Any, spec: FieldSpec) -> None:
+    """Every schema field holds one value. An object or list here means bad data."""
+    if isinstance(value, (dict, list)):
+        kind = "an object" if isinstance(value, dict) else "a list"
+        raise MappingError(f"field '{target}': expected a single value, got {kind} ({_describe(spec)})")
+
+
 def map_value(target: str, spec: FieldSpec, raw: dict) -> Any:
+    for path in spec.join or ():
+        _reject_object(target, get_path(raw, path), spec)
     value = _source_value(spec, raw)
+    if value not in _EMPTY:
+        _reject_object(target, value, spec)
     if value in _EMPTY and spec.default is not None:
         value = spec.default
     if value in _EMPTY:

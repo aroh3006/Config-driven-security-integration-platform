@@ -113,6 +113,24 @@ def test_badrecord_fault(runner, store):
     assert r.records_bad == 1 and "missing required field 'id'" in store.quarantine[0]["reason"]
 
 
+def test_object_in_a_text_field_is_quarantined(runner, store):
+    bad = okta_record(2)
+    bad["status"] = {"unexpected": "object"}
+
+    r = runner(USERS, lambda req: httpx.Response(200, json=[okta_record(1), bad]))
+    assert r.status == "partial" and r.records_bad == 1 and len(store.tables["users"]) == 1
+    assert "field 'status': expected a single value, got an object" in store.quarantine[0]["reason"]
+
+
+def test_object_inside_a_join_is_quarantined(runner, store):
+    bad = okta_record(2)
+    bad["profile"]["firstName"] = ["a", "list"]
+
+    r = runner(USERS, lambda req: httpx.Response(200, json=[okta_record(1), bad]))
+    assert r.records_bad == 1
+    assert "field 'name': expected a single value, got a list" in store.quarantine[0]["reason"]
+
+
 def test_incremental_sends_and_advances_watermark(runner, store):
     text = USERS.replace("map:", "incremental: {field: lastUpdated, param: filter, template: 'lastUpdated gt \"{checkpoint}\"', start: '2026-10-01T00:00:00Z'}\nmap:")
     filters = []

@@ -127,7 +127,7 @@ def install_log_masking() -> None:
         except Exception:  # malformed format args: leave the record alone
             return record
         masked = mask(msg)
-        if masked != msg or record.args:
+        if masked != msg:  # keep args when clean, access formatters read them
             record.msg, record.args = masked, ()
         return record
 
