@@ -360,7 +360,8 @@ def _update_status(cfg: Config, result: RunResult, store) -> str:
     fails = int(row.get("consecutive_failures") or 0)
     if result.status in ("success", "partial"):
         fails = 0
-        status = "degraded" if (result.records_bad or result.retries) else "healthy"
+        # A partial run stopped early or set records aside, so it is never fully healthy.
+        status = "degraded" if (result.status == "partial" or result.records_bad or result.retries) else "healthy"
     elif result.status == "auth_failed":
         fails += 1
         status = "auth_failed"

@@ -103,6 +103,19 @@ def test_body_next_url_cursor_nested_like_edr(runner):
     assert r.records_pulled == 7
 
 
+def test_run_stopped_at_the_page_limit_is_not_healthy(runner, store):
+    def h(req):
+        page, size = int(req.url.params["page"]), int(req.url.params["per_page"])
+        return httpx.Response(200, json=ITEMS[(page - 1) * size: page * size])
+
+    text = cfg("{type: page_number, page_param: page, size_param: per_page, size: 2}", "").replace(
+        "map:", "limits: {max_pages: 2}\nmap:"
+    )
+    r = runner(text, h)
+    assert r.status == "partial" and r.more_pages and r.records_bad == 0 and r.retries == 0
+    assert store.get_connector("src")["status"] == "degraded"
+
+
 def test_max_pages_keeps_resume_point(runner, store):
     def h(req):
         page = int(req.url.params["page"])
