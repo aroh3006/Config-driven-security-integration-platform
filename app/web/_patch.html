@@ -1,0 +1,44 @@
+{# Expects: p (from app.patch.build) and engine {eyebrow, title, note, chips, tray} #}
+<div class="patch" style="min-height: {{ p.height }}px">
+  <div class="sockets">
+    {% for s in p.sockets %}
+    <a class="socket {% if s.tone in ('amber', 'red') %}{{ s.tone }}{% endif %}" href="{{ s.href }}">
+      <i class="dot t-{{ s.tone }}" aria-hidden="true"></i>
+      <span class="socket-text"><b title="{{ s.name }}">{{ s.name }}</b><small class="t-{{ s.tone }}" title="{{ s.detail }}">{{ s.status }} · {{ s.detail }}</small></span>
+    </a>
+    {% endfor %}
+    {% if p.more %}<a class="socket more" href="/#health">+{{ p.more }} more</a>{% endif %}
+    {% if p.slot %}<a class="socket ghost" href="/ui/add"><span aria-hidden="true">+</span> Plug in a new source</a>{% endif %}
+  </div>
+  <div class="cables">
+    <svg viewBox="0 0 100 {{ p.height }}" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+      {% for c in p.cables_in %}
+      <path class="cable {{ c.tone }}" d="{{ c.d }}"/>
+      {% if c.flows %}<path class="pulse" d="{{ c.d }}"/>{% endif %}
+      {% endfor %}
+    </svg>
+    {% if p.tag %}<span class="cable-tag {{ p.tag.tone }}" style="top: {{ p.tag.y }}px">{{ p.tag.text }}</span>{% endif %}
+  </div>
+  <div class="engine-col">
+    <div class="engine">
+      <span class="eyebrow">{{ engine.eyebrow }}</span>
+      <b>{{ engine.title }}</b>
+      {% if engine.note %}<p>{{ engine.note }}</p>{% endif %}
+      {% if engine.chips %}<div class="chips">{% for chip in engine.chips %}<span>{{ chip }}</span>{% endfor %}</div>{% endif %}
+    </div>
+    {% if engine.tray %}<a class="tray" href="{{ engine.tray.href }}">quarantine <span>{{ engine.tray.count }}</span></a>{% endif %}
+  </div>
+  <div class="cables">
+    <svg viewBox="0 0 100 {{ p.height }}" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+      {% for c in p.cables_out %}
+      <path class="cable out" d="{{ c.d }}"/>
+      {% if c.flows %}<path class="pulse out" d="{{ c.d }}"/>{% endif %}
+      {% endfor %}
+    </svg>
+  </div>
+  <div class="outputs">
+    {% for o in p.outputs %}
+    <a class="output" href="{{ o.href }}" style="top: {{ o.y }}px">{{ o.label }}<span class="count">{{ "{:,}".format(o.count) }}</span></a>
+    {% endfor %}
+  </div>
+</div>

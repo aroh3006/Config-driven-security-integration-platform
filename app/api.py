@@ -5,11 +5,13 @@ from __future__ import annotations
 import logging
 import threading
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any, AsyncIterator
 from urllib.parse import urlsplit
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from app import connectors, engine_client as engine, health, notify, pages
@@ -18,6 +20,7 @@ from store import db
 log = logging.getLogger(__name__)
 
 ACTOR = "api"
+STATIC_DIR = Path(__file__).parent / "static"
 
 
 class ConfigBody(BaseModel):
@@ -78,7 +81,8 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Config-driven integration platform", lifespan=lifespan)
+    app = FastAPI(title="Otto", lifespan=lifespan)
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
     @app.middleware("http")
     async def same_origin_writes(request: Request, call_next: Any) -> Response:

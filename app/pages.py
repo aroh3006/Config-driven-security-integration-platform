@@ -16,7 +16,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
-from app import connectors, engine_client as engine, formbuilder, health
+from app import connectors, engine_client as engine, formbuilder, health, patch, sidebar, theme
 from store import db
 
 ACTOR = "web"
@@ -27,10 +27,30 @@ PAGING_TYPES = ("none", "link_header", "page_number", "offset", "body_token", "b
 ENTITY_PAGES = {"users": "user", "devices": "device", "alerts": "alert"}
 
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "web"))
+templates.env.globals["tone"] = theme.tone
+
+HOME_ENGINE = {
+    "eyebrow": "The engine",
+    "title": "Same rules for every source",
+    "note": "",
+    "chips": ("login", "paging", "retries", "rate limits", "mapping", "secrets"),
+}
 
 
-def _render(request: Request, name: str, **context: Any) -> HTMLResponse:
-    context.update(stubbed=engine.stubbed_functions(), msg=request.query_params.get("msg"))
+def _render(
+    request: Request,
+    name: str,
+    nav: str = "",
+    current: str | None = None,
+    **context: Any,
+) -> HTMLResponse:
+    context.update(
+        stubbed=engine.stubbed_functions(),
+        msg=request.query_params.get("msg"),
+        nav=nav,
+        current=current,
+        side=sidebar.build(request.query_params.get("find")),
+    )
     return templates.TemplateResponse(request, name, context)
 
 
@@ -71,6 +91,8 @@ def build_router(
         return _render(
             request,
             "connector.html",
+            nav="sources",
+            current=name,
             connector=connector,
             row=health.connector_row(connector),
             runs=db.list_runs(name, limit=20),
@@ -80,7 +102,28 @@ def build_router(
 
     @router.get("/", response_class=HTMLResponse)
     def health_page(request: Request) -> HTMLResponse:
-        return _render(request, "health.html", rows=health.health_rows())
+        rows = health.health_rows()
+        return _render(
+            request,
+            "health.html",
+            nav="home",
+            rows=rows,
+            p=patch.build(rows),
+            engine=HOME_ENGINE,
+            healthy=sum(1 for row in rows if row["status"] == "healthy"),
+        )
+
+    @router.get("/ui/live")
+    def live_entry() -> Response:
+        return RedirectResponse("/ui/demo", status_code=303)
+
+    @router.get("/ui/configs", response_class=HTMLResponse)
+    def configs_page(request: Request) -> HTMLResponse:
+        return _render(request, "configs.html", nav="configs", rows=health.health_rows())
+
+    @router.get("/ui/quarantine", response_class=HTMLResponse)
+    def quarantine_page(request: Request) -> HTMLResponse:
+        return _render(request, "quarantine.html", nav="quarantine", items=db.list_quarantine(limit=200))
 
     @router.get("/ui/connector/{name}", response_class=HTMLResponse)
     def connector_view(request: Request, name: str) -> HTMLResponse:
@@ -125,6 +168,7 @@ def build_router(
         return _render(
             request,
             "add_source.html",
+            nav="sources",
             form=form,
             auth_types=AUTH_TYPES,
             paging_types=PAGING_TYPES,
@@ -194,6 +238,7 @@ def build_router(
         return _render(
             request,
             "records.html",
+            nav="data",
             entity=entity,
             columns=("source", "id", *db.ENTITY_COLUMNS[entity], "fetched_at"),
             rows=db.query_records(entity, source=source or None, q=q or None),
@@ -207,6 +252,7 @@ def build_router(
         return _render(
             request,
             "people.html",
+            nav="data",
             emails=db.list_emails(),
             email=email or "",
             records=db.person_records(email) if email else None,
@@ -220,6 +266,7 @@ def build_router(
         return _render(
             request,
             "kev.html",
+            nav="data",
             rows=db.kev_matches(KEV_SOURCE),
             kev_count=db.count_records("alert", KEV_SOURCE),
             kev_source=KEV_SOURCE,
@@ -229,7 +276,7 @@ def build_router(
     @router.get("/ui/demo", response_class=HTMLResponse)
     def demo_page(request: Request) -> HTMLResponse:
         return _render(
-            request, "demo.html", connectors=db.list_connectors(), modes=FAULT_MODES
+            request, "demo.html", nav="live", connectors=db.list_connectors(), modes=FAULT_MODES
         )
 
     @router.post("/ui/demo")
@@ -251,6 +298,6 @@ def build_router(
 
     @router.get("/ui/audit", response_class=HTMLResponse)
     def audit_page(request: Request) -> HTMLResponse:
-        return _render(request, "audit.html", rows=db.list_audit())
+        return _render(request, "audit.html", nav="audit", rows=db.list_audit())
 
     return router

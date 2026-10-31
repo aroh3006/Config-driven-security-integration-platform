@@ -1,39 +1,69 @@
 {% extends "base.html" %}
+{% from "_icons.html" import status %}
 {% block head %}<meta http-equiv="refresh" content="10">{% endblock %}
-{% block title %}Health{% endblock %}
+{% block title %}Home{% endblock %}
 {% block content %}
-<h1>Connection health</h1>
-{% if not rows %}
-<p>No connectors yet. <a href="/ui/add">Add a source</a> or fill in the placeholders in <code>/configs</code> and restart.</p>
-{% else %}
-<div class="wrap"><table>
-  <tr><th>Connector</th><th>Entity</th><th>Status</th><th>Last run</th><th>Pulled</th><th>Bad</th><th>Last error</th><th>Next run</th><th>Actions</th></tr>
-  {% for row in rows %}
-  <tr>
-    <td><a href="/ui/connector/{{ row.name|urlencode }}">{{ row.name }}</a>
-      {% if row.mock %}<span class="badge mock">mock</span>{% endif %}</td>
-    <td>{{ row.entity }}</td>
-    <td><span class="badge {{ row.status }}">{{ row.status }}</span>
-      {% if row.running %}<span class="badge running">running</span>{% endif %}</td>
-    <td>{{ row.last_run }}</td>
-    <td>{{ "{:,}".format(row.records_pulled) }}</td>
-    <td>{{ row.records_bad }}</td>
-    <td>{{ row.last_error or "" }}</td>
-    <td>{{ row.next_run }}</td>
-    <td style="white-space:nowrap">
-      <form class="inline" method="post" action="/ui/connector/{{ row.name|urlencode }}/test"><button>Test</button></form>
-      <form class="inline" method="post" action="/ui/connector/{{ row.name|urlencode }}/run"><button>Run now</button></form>
-      {% if row.enabled %}
-      <form class="inline" method="post" action="/ui/connector/{{ row.name|urlencode }}/pause"><button>Pause</button></form>
-      {% else %}
-      <form class="inline" method="post" action="/ui/connector/{{ row.name|urlencode }}/resume"><button>Resume</button></form>
-      {% endif %}
-    </td>
-  </tr>
-  {% endfor %}
-</table></div>
-<h2>Summary</h2>
-<ul class="plain">{% for row in rows %}<li>{{ row.summary }}</li>{% endfor %}</ul>
+<section class="hero">
+  <div class="hero-copy">
+    <span class="label">[ Config-driven · security integration ]</span>
+    <h1>Any tool.<br>One config.</h1>
+    <p class="note">One engine pulls users, devices and alerts from every security tool. A new source is a config file, not new code.</p>
+  </div>
+  <a class="btn" href="/ui/add">Plug in a source</a>
+</section>
+
+<section class="patch-box" aria-label="Patch panel">
+  <div class="hero-word" aria-hidden="true">CONNECT</div>
+  {% include "_patch.html" %}
+</section>
+
+<section class="strip" aria-label="Summary">
+  <div><span class="label">Configuration</span><b>{{ "{:,}".format(rows|length) }} YAML file{{ "" if rows|length == 1 else "s" }}, one per source</b></div>
+  <div><span class="label">Sources</span><b>{{ healthy }} healthy of {{ rows|length }}</b></div>
+  <div><span class="label">Failure handling</span><b>Retry · rate limit · quarantine</b></div>
+  <div><span class="label">Common schema</span><b>{{ "{:,}".format(p.totals.user) }} users · {{ "{:,}".format(p.totals.device) }} devices · {{ "{:,}".format(p.totals.alert) }} alerts</b></div>
+  <div><a class="btn primary" href="/ui/live">Open live panel →</a></div>
+</section>
+
+<section class="card" id="health" aria-label="Connection health">
+  <div class="label-row"><span class="label">[ Connection health ]</span><span class="label">Refreshes every 10 s</span></div>
+  {% if not rows %}
+  <p class="note">No connectors yet. <a href="/ui/add">Add a source</a> or fill in the placeholders in <code>/configs</code> and restart.</p>
+  {% else %}
+  <div class="wrap"><table>
+    <thead><tr><th>Connector</th><th>Entity</th><th>Status</th><th>Last run</th><th class="num">Pulled</th><th class="num">Bad</th><th>Last error</th><th>Next run</th><th>Actions</th></tr></thead>
+    <tbody>
+    {% for row in rows %}
+    <tr>
+      <td class="name"><a href="/ui/connector/{{ row.name|urlencode }}">{{ row.name }}</a>
+        {% if row.mock %}<span class="badge mock">mock</span>{% endif %}</td>
+      <td>{{ row.entity }}</td>
+      <td>{{ status(row.status) }}{% if row.running %}<br>{{ status("running") }}{% endif %}</td>
+      <td>{{ row.last_run }}</td>
+      <td class="num">{{ "{:,}".format(row.records_pulled) }}</td>
+      <td class="num">{{ row.records_bad }}</td>
+      <td class="err">{{ row.last_error or "" }}</td>
+      <td>{{ row.next_run }}</td>
+      <td><div class="cell-actions">
+        <form class="inline" method="post" action="/ui/connector/{{ row.name|urlencode }}/test"><button aria-label="Test {{ row.name }}">Test</button></form>
+        <form class="inline" method="post" action="/ui/connector/{{ row.name|urlencode }}/run"><button aria-label="Run {{ row.name }} now">Run now</button></form>
+        {% if row.enabled %}
+        <form class="inline" method="post" action="/ui/connector/{{ row.name|urlencode }}/pause"><button aria-label="Pause {{ row.name }}">Pause</button></form>
+        {% else %}
+        <form class="inline" method="post" action="/ui/connector/{{ row.name|urlencode }}/resume"><button aria-label="Resume {{ row.name }}">Resume</button></form>
+        {% endif %}
+      </div></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% endif %}
+</section>
+
+{% if rows %}
+<section class="card" aria-label="Summary lines">
+  <span class="label">[ Summary ]</span>
+  <ul class="plain note">{% for row in rows %}<li>{{ row.summary }}</li>{% endfor %}</ul>
+</section>
 {% endif %}
-<p class="muted">Refreshes every 10 seconds.</p>
 {% endblock %}
