@@ -318,6 +318,48 @@ def test_scenario_names_only_the_secret_that_is_missing(client, monkeypatch):
     assert saas.JIRA_TOKEN not in page
 
 
+def test_source_with_no_keys_runs_on_its_mock_twin(client, monkeypatch):
+    monkeypatch.setenv("JIRA_EMAIL", "")
+    monkeypatch.setenv("JIRA_TOKEN", "")
+    text = (REPO_CONFIGS / "jira-tickets.yaml").read_text(encoding="utf-8")
+    assert connectors.save_and_approve(text, "test") == []
+    reply = client.post("/ui/live/jira-tickets/scenario", data={"scenario": "healthy"}, follow_redirects=False)
+    assert reply.headers["location"].startswith("/ui/live/mock-jira-tickets?")
+    page = client.get(reply.headers["location"]).text
+    assert "jira-tickets has no keys yet, so this ran on mock-jira-tickets, which uses fake data." in page
+    assert db.last_run("jira-tickets") is None
+    assert db.last_run("mock-jira-tickets")["status"] != "auth_failed"
+
+
+def test_live_entry_skips_a_source_that_cannot_run(client, monkeypatch):
+    press(client, "mock-okta-users", "healthy")
+    press(client, "mock-jira-tickets", "wrong_key")
+    monkeypatch.setenv("MOCK_JIRA_EMAIL", "")
+    reply = client.get("/ui/live", follow_redirects=False)
+    assert reply.headers["location"] == "/ui/live/mock-okta-users"
+
+
+def test_page_during_a_rate_limit_wait_tells_the_whole_story(client):
+    db.save_connector("mock-okta-users", "user", db.get_connector("mock-okta-users")["config_yaml"], db.get_connector("mock-okta-users")["approved_hash"])
+    live.begin("mock-okta-users", "rate_limit")
+    live.note_wait("mock-okta-users", 30, "rate limit")
+    page = client.get("/ui/live/mock-okta-users").text
+    assert "Slowed down: rate limit" in page
+    assert "Got 429. Told to wait 30 s" in page and "Will fetch that page again" in page
+    assert "No request log" not in page
+    assert "NEXT PAGE · kept, nothing lost" in page
+    head = page[page.index('class="head-title"') : page.index('class="actions"')]
+    assert "waiting" in head and "healthy" not in head
+    live.reset()
+
+
+def test_connections_card_shows_counts_and_known_sources_first(client):
+    press(client, "mock-okta-users", "healthy")
+    page = client.get("/ui/live/mock-jira-tickets").text
+    card = page[page.index("[ Connections · now ]") :]
+    assert "mock-okta-users" in card and "119 users" in card
+
+
 def test_missing_secret_does_not_claim_a_401(client, wired, monkeypatch):
     monkeypatch.setenv("MOCK_JIRA_EMAIL", "")
     wired("mock-jira-tickets")
@@ -383,6 +425,7 @@ def test_bad_record_scenario_shows_the_broken_record(client):
     assert "[ Quarantine · " in page
     assert "REPLAY · after a fix" in page
     assert 'class="tray"' in page
+    assert "EMAIL · empty" in page and "EMAIL · ok" not in page
 
 
 def test_pressing_healthy_clears_a_failure(client):

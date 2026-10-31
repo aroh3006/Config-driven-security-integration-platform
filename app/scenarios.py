@@ -11,6 +11,7 @@ from urllib.parse import urlsplit
 
 import yaml
 
+from app.patch import calm_order
 from app.theme import tone
 from store import db
 
@@ -221,6 +222,16 @@ def _trim_timeline(lines: list[dict[str, str]]) -> list[dict[str, str]]:
     return kept
 
 
+def _wait_lines(state: dict[str, Any]) -> list[dict[str, str]]:
+    """The saved log only exists once a run ends. A wait is known before that."""
+    wait = _seconds(state["seconds"])
+    if state["reason"] == "rate limit":
+        first = {"at": state["began_at"], "text": f"Got 429. Told to wait {wait}", "tone": "amber"}
+    else:
+        first = {"at": state["began_at"], "text": f"No good answer. Retry in {wait}", "tone": "red"}
+    return [first, {"at": state["resumes_at"], "text": "Will fetch that page again", "tone": ""}]
+
+
 def _spec_path(spec: Any) -> str | None:
     if isinstance(spec, str):
         return spec
@@ -245,6 +256,8 @@ def _record_rows(config: dict[str, Any], item: dict[str, Any]) -> list[dict[str,
         shown = "(missing)" if value is None else str(value)[:60]
         if f"'{target}'" in reason:
             rows.append({"code": f"{path}: {shown}", "tag": f"{target.upper()} · set aside", "tone": "amber"})
+        elif value is None:
+            rows.append({"code": f"{path}: {shown}", "tag": f"{target.upper()} · empty", "tone": ""})
         else:
             rows.append({"code": f"{path}: {shown}", "tag": f"{target.upper()} · ok", "tone": "teal"})
     rows.append({"code": "raw record kept in quarantine", "tag": "REPLAY · after a fix", "tone": ""})
@@ -497,7 +510,9 @@ def build(name: str, connector: dict[str, Any], rows: list[dict[str, Any]], stat
         if checkpoint["resume_state"] and kind in ("timeout", "failed", "partial"):
             request_rows.append({"code": "checkpoint saved", "tag": "NEXT RUN · resumes here", "tone": "teal"})
         paging = (config.get("pagination") or {}).get("type")
-        if run and paging and paging != "none" and run["pages"]:
+        if state["waiting"] and paging and paging != "none":
+            request_rows.append({"code": f"pagination: {paging}", "tag": "NEXT PAGE · kept, nothing lost", "tone": ""})
+        elif run and paging and paging != "none" and run["pages"]:
             pages = run["pages"]
             request_rows.append(
                 {"code": f"pagination: {paging}", "tag": f"NEXT PAGE · {pages} page{'s' if pages != 1 else ''} fetched", "tone": ""}
@@ -511,7 +526,7 @@ def build(name: str, connector: dict[str, Any], rows: list[dict[str, Any]], stat
                 {"code": f"{first_map[1]} → {first_map[0]}", "tag": f"MAPPING · into {connector['entity']}s", "tone": ""}
             )
 
-    peers = sorted((row for row in rows if row["name"] != name), key=lambda row: tone(row["status"]) != "teal")
+    peers = sorted((row for row in rows if row["name"] != name), key=calm_order)
     run_label = f"run {_time(run['started_at'])[:5]}" if run else "no runs"
     page_label = f" · page {run['pages']}" if run and run["pages"] else ""
     if state["active"]:
@@ -526,7 +541,7 @@ def build(name: str, connector: dict[str, Any], rows: list[dict[str, Any]], stat
         "pill": pill,
         "heading": heading,
         "request_rows": request_rows,
-        "timeline": _timeline(run, requests),
+        "timeline": _wait_lines(state) if state["waiting"] else _timeline(run, requests),
         "alert": _alert(name, connector, config, run) if kind in ("auth", "secret_missing", "timeout", "failed") else None,
         "quarantine": quarantined[:QUARANTINE_LIMIT],
         "quarantine_total": len(quarantined),

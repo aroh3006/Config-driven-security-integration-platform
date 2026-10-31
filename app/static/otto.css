@@ -884,7 +884,8 @@ td.raw pre { max-height: 180px; overflow-y: auto; }
 .timeline time { width: 64px; flex: none; color: var(--label); font: 400 11.5px var(--mono); line-height: 1.7; }
 
 .reading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 4px 12px; font-size: 13px; }
-.reading a { color: var(--text); font-family: var(--mono); font-size: 12.5px; }
+.reading a { color: var(--text); font-family: var(--mono); font-size: 12.5px; overflow-wrap: anywhere; }
+.reading-end { display: flex; align-items: center; gap: 10px; margin-left: auto; white-space: nowrap; }
 .q-item { padding: 12px; display: flex; flex-direction: column; gap: 4px; background: var(--card); border-radius: 10px; }
 .q-item code { font-size: 12.5px; overflow-wrap: anywhere; }
 .q-item span { color: var(--amber-text); font-size: 13px; overflow-wrap: anywhere; }

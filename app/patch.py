@@ -17,6 +17,7 @@ STEP = ROW_HEIGHT + ROW_GAP
 OUTPUTS = (("users", "user"), ("devices", "device"), ("alerts", "alert"))
 ENTRY_SPREAD = 150
 OUTPUT_GAP = 74
+LIVE_PEERS = ("mock-okta-users", "mock-github-members", "mock-jira-tickets", "cisa-kev")
 
 
 def _curve(start: float, end: float) -> str:
@@ -25,6 +26,12 @@ def _curve(start: float, end: float) -> str:
 
 def _order(row: dict[str, Any]) -> tuple[int, int, str]:
     return (RANK[tone(row["status"])], 1 if row["mock"] else 0, row["name"])
+
+
+def calm_order(row: dict[str, Any]) -> tuple[bool, int]:
+    """Healthy rows first, with the best known sources at the front."""
+    name = row["name"]
+    return (tone(row["status"]) != "teal", LIVE_PEERS.index(name) if name in LIVE_PEERS else len(LIVE_PEERS))
 
 
 def choose(
@@ -37,7 +44,7 @@ def choose(
     """
     ordered = sorted(rows, key=_order)
     if healthy_first:
-        ordered.sort(key=lambda row: tone(row["status"]) != "teal")
+        ordered.sort(key=calm_order)
     if focus:
         ordered = [r for r in ordered if r["name"] == focus] + [r for r in ordered if r["name"] != focus]
     return ordered[:limit]

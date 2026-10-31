@@ -100,6 +100,15 @@ def _redirect(path: str, msg: str) -> RedirectResponse:
     return RedirectResponse(f"{path}?msg={quote(msg)}", status_code=303)
 
 
+def _can_run(connector: dict[str, Any]) -> bool:
+    """True when nothing would stop a scenario before it reached the source."""
+    return (
+        connector["status"] != "paused"
+        and connector["approved_hash"] == connector["config_hash"]
+        and not engine.missing_secrets(connector["config_yaml"])
+    )
+
+
 def _pretty(value: Any) -> str:
     return json.dumps(value, indent=2, default=str)
 
@@ -207,8 +216,12 @@ def build_router(
         rows = health.health_rows()
         if not rows:
             return _redirect("/ui/add", "Add a source first")
-        worst = patch.choose(rows, 1)[0]["name"]
-        return RedirectResponse(f"/ui/live/{quote(worst)}", status_code=303)
+        # A source that cannot run has nothing to show here. Health still lists it.
+        ready = [row for row in rows if _can_run(db.get_connector(row["name"]))] or rows
+        first = patch.choose(ready, 1)[0]
+        if theme.tone(first["status"]) == "teal":
+            first = patch.choose(ready, 1, healthy_first=True)[0]
+        return RedirectResponse(f"/ui/live/{quote(first['name'])}", status_code=303)
 
     @router.get("/ui/live/{name}", response_class=HTMLResponse)
     def live_page(request: Request, name: str) -> HTMLResponse:
@@ -220,10 +233,8 @@ def build_router(
         state = live.snapshot(name)
         view = scenarios.build(name, connector, rows, state)
         shown = [dict(item) for item in rows]
-        if state["waiting"]:
-            next(item for item in shown if item["name"] == name)["status"] = "waiting"
-        elif state["active"]:
-            next(item for item in shown if item["name"] == name)["status"] = "running"
+        head_status = "waiting" if state["waiting"] else "running" if state["active"] else row["status"]
+        next(item for item in shown if item["name"] == name)["status"] = head_status
         tray = None
         if view["kind"] == "bad_record":
             tray = {"href": "/ui/quarantine", "count": view["quarantine_total"]}
@@ -234,6 +245,7 @@ def build_router(
             current=name,
             connector=connector,
             row=row,
+            head_status=head_status,
             view=view,
             scenarios=scenarios.SCENARIOS,
             refresh=state["active"] or (row["running"] and row["recent"]),
@@ -257,12 +269,18 @@ def build_router(
         scenario = scenarios.SCENARIOS.get(key)
         if scenario is None:
             raise HTTPException(400, f"unknown scenario {key!r}")
+        missing = engine.missing_secrets(connector["config_yaml"])
+        twin = db.get_connector(f"mock-{name}") if missing else None
+        note = None
+        if twin is not None:
+            note = f"{name} has no keys yet, so this ran on {twin['name']}, which uses fake data."
+            name, connector = twin["name"], twin
+            missing = engine.missing_secrets(connector["config_yaml"])
         back = f"/ui/live/{quote(name)}"
         if connector["status"] == "paused":
             return _redirect(back, f"{name} is paused. Resume it to run a scenario.")
         if connector["approved_hash"] != connector["config_hash"]:
             return _redirect(back, f"{name} has a changed config. Approve it to run a scenario.")
-        missing = engine.missing_secrets(connector["config_yaml"])
         if missing:
             needed = ", ".join(missing)
             return _redirect(back, f"Nothing ran. {name} needs {needed} in .env. Add it, then restart Otto.")
@@ -274,7 +292,7 @@ def build_router(
             engine.set_fault(name, scenario["mode"])
         db.audit(ACTOR, "scenario.start", name, key)
         _spawn(lambda: tracked_run(name))
-        return RedirectResponse(back, status_code=303)
+        return _redirect(back, note) if note else RedirectResponse(back, status_code=303)
 
     @router.get("/ui/configs", response_class=HTMLResponse)
     def configs_page(request: Request) -> HTMLResponse:

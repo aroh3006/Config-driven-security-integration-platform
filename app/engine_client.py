@@ -108,9 +108,10 @@ def missing_secrets(yaml_text: str) -> list[str]:
     from engine.secrets import env_name, has_secret
 
     try:
-        names = load_config(yaml_text).secret_names()
+        config = load_config(yaml_text)
     except ConfigError:
         return []
+    names = config.secret_names() if hasattr(config, "secret_names") else []
     return [env_name(name) for name in names if not has_secret(name)]
 
 
