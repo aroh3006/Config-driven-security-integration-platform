@@ -18,12 +18,14 @@ Token endpoint: `POST /edr/oauth2/token`. It takes the client in the form body o
 
 ## How the shapes are checked
 
-`tests/vendor_schemas.py` holds field lists copied from the vendors' published OpenAPI specs. `tests/test_mock_saas.py` checks clean records against them: required fields are present, no field is outside the spec and enum values are valid. The specs were read on 2026-10-31.
+`tests/vendor_schemas.py` holds field lists copied from the vendors' published OpenAPI specs. `tests/test_mock_saas.py` checks every mock against them.
+
+Field names and enum values were also compared with live responses from a real Okta org and the real GitHub API. Jira rate limit headers and CloudTrail console sign-in records follow Atlassian's and AWS's docs. `tests/test_mock_data.py` keeps the data rules below from regressing.
 
 CVE data is real:
 
 - All nine IDs in `KEV_CVES` were checked against the live CISA KEV catalog. Their scores are NVD's CVSS v3.1 base scores.
-- GHSA IDs, CVSS vectors, CWEs and version ranges come from GitHub's public advisory database.
+- GHSA IDs, CVSS vectors, CWEs and version ranges were checked against GitHub's advisory API.
 - CVE-2022-28346, CVE-2021-44906 and CVE-2021-23337 are real but not in KEV. The KEV match has to leave them out.
 
 Other values follow the standard ranges. External IPs are in 192.0.2.0/24, 198.51.100.0/24 and 203.0.113.0/24. Internal hosts use 10.x. Identities and links use example.com. MITRE technique IDs and SHA-256 hashes use the real formats.
@@ -32,7 +34,7 @@ Other values follow the standard ranges. External IPs are in 192.0.2.0/24, 198.5
 
 - **Okta logs:** a polling request (no `until`) always gets a `next` link, even when the page is empty. `since` older than 180 days gives a 400.
 - **Okta errors:** `E0000011` for a bad token, `E0000006` for no permission, `E0000047` for rate limiting.
-- **GitHub:** `X-RateLimit-*` headers, an API version header, `per_page` capped at 100 and no email on most members.
+- **GitHub:** `X-RateLimit-*` headers, an API version header, `per_page` capped at 100. Members have no name or email, as in the live list. Alerts come newest first and numbers rise with time.
 - **Jira:** returns only ids unless `fields` names some, rejects unbounded JQL, leaves `nextPageToken` off the last page and writes timestamps like `+0000` with no colon. Descriptions use Atlassian Document Format.
 - **All:** responses over 500 bytes are gzip compressed when the client accepts it. Keys are compared in constant time.
 
@@ -42,7 +44,11 @@ Other values follow the standard ranges. External IPs are in 192.0.2.0/24, 198.5
 - **Okta filter:** only `eventType eq "..."` is understood.
 - **Cloud login:** real CloudTrail uses SigV4 signing. The mock uses a simple header key.
 - **`Cve` on cloud events:** real CloudTrail has no such field. It appears only on `BatchImportFindings` events so the KEV match has cloud rows.
-- **EDR fields:** the shape follows common EDR APIs. It does not copy one vendor exactly.
+- **EDR fields:** the shape follows common EDR APIs. It does not copy one vendor exactly. `cve` and `cvss_score` are extras for the KEV match and appear only on exploit detections.
+- **`user.account.lock`:** the display message is Okta's. The outcome `FAILURE` with reason `LOCKED_OUT` is not confirmed. The test org has no lockout events.
+- **Okta and GitHub 429:** both mocks send `Retry-After`. Real Okta signals the wait with `X-Rate-Limit-Reset`.
+- **AWS status codes:** real CloudTrail answers bad credentials and throttling with HTTP 400. The mock uses 401 and 429 so the failure tests behave the same on every source.
+- **Commands in EDR detections:** process names and command lines are illustrative.
 - **GitHub 429:** real GitHub can also signal rate limits with a 403. The mock always uses 429.
 - **Links in data:** URLs inside records point at example.com, not the mock server.
 
@@ -56,6 +62,8 @@ Records at positions 50, 150, 250 and so on are damaged on purpose, about 1% of 
 2. The timestamp is null.
 3. The timestamp is `yesterday-ish`.
 4. A type or severity field is an object when it should be text.
+
+Short lists only reach the first kind or two. EDR hosts, EDR detections and cloud audit start the cycle later. That way all four kinds appear across the sources. The engine quarantines all four.
 
 The random seed is fixed. Timestamps fall in the 7 days before the server started.
 

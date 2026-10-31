@@ -3,6 +3,8 @@
 GitHub: github/rest-api-description, descriptions/api.github.com/api.github.com.json
 Okta: okta/okta-management-openapi-spec, dist/current/management-minimal.yaml
 Jira: developer.atlassian.com/cloud/jira/platform/swagger-v3.v3.json
+
+OKTA_LOG_FIELDS also lists device and gatewayContext, seen in a real /api/v1/logs response.
 """
 
 GITHUB_ALERT_REQUIRED = {
@@ -26,8 +28,9 @@ GITHUB_USER_REQUIRED = {
 GITHUB_USER_FIELDS = GITHUB_USER_REQUIRED | {"email", "name", "starred_at", "user_view_type"}
 
 OKTA_LOG_FIELDS = {
-    "actor", "authenticationContext", "client", "debugContext", "displayMessage", "eventType", "legacyEventType",
-    "outcome", "published", "request", "securityContext", "severity", "target", "transaction", "uuid", "version",
+    "actor", "authenticationContext", "client", "debugContext", "device", "displayMessage", "eventType",
+    "gatewayContext", "legacyEventType", "outcome", "published", "request", "securityContext", "severity", "target",
+    "transaction", "uuid", "version",
 }
 OKTA_ACTOR_FIELDS = {"alternateId", "detailEntry", "displayName", "id", "type"}
 OKTA_CLIENT_FIELDS = {"device", "geographicalContext", "id", "ipAddress", "userAgent", "zone"}

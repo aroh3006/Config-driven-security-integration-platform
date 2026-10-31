@@ -134,9 +134,20 @@ def test_people_view_joins_across_mock_sources(run, monkeypatch):
     run("mock-okta-signins")
     run("mock-edr-hosts")
     records = db.person_records("ann@example.com")
-    assert {row["source"] for row in records["users"]} == {"mock-okta-users", "mock-github-members"}
+    # GitHub's member list has no email. GitHub rows cannot join on it.
+    assert {row["source"] for row in records["users"]} == {"mock-okta-users"}
     assert records["devices"]
     assert records["alerts"]
+
+
+@pytest.mark.parametrize("name, entity", [("mock-edr-detections", "alert"), ("mock-cloud-audit", "alert"), ("mock-edr-hosts", "device")])
+def test_wrong_type_records_are_quarantined_not_stored(run, name, entity):
+    run(name)
+    stored = db.query_records(entity, source=name, limit=1000)
+    columns = ("id", "type", "severity", "description", "os", "hostname")
+    assert not any("unexpected" in str(row.get(column)) for row in stored for column in columns)
+    reasons = [item["reason"] for item in db.list_quarantine(name, limit=50)]
+    assert any("expected a single value, got an object" in reason for reason in reasons)
 
 
 def test_jira_timestamps_with_no_colon_offset_parse(run):

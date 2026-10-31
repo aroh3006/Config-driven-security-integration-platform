@@ -36,13 +36,18 @@ def test_data_is_deterministic():
 
 def test_data_follows_the_mock_rules():
     events = data.firewall_events(NOW)
-    assert all(re.match(r"(192\.0\.2|198\.51\.100|203\.0\.113)\.", e["src"]) for e in events)
-    assert all(e["dst"].startswith("10.") for e in events)
+    external = tuple(f"{prefix}." for prefix in data.EXTERNAL_RANGES)
+    inbound = [e for e in events if e["deviceDirection"] == 0]
+    outbound = [e for e in events if e["deviceDirection"] == 1]
+    assert inbound and outbound
+    assert all(e["src"].startswith(external) and e["dst"].startswith("10.") for e in inbound)
+    assert all(e["src"].startswith("10.") and e["dst"].startswith(external) for e in outbound)
     assert any(e.get("cs1") in data.KEV_CVES for e in events)
 
     detections = data.edr_detections(NOW)
     clean = [d for d in detections if isinstance(d["severity_name"], str)]
-    assert all(d["severity_name"].lower() == data.severity_band(d["cvss_score"]) for d in clean)
+    assert all(d["severity_name"].lower() == data.severity_band(d["cvss_score"]) for d in clean if d["cve"])
+    assert all(d["cvss_score"] is None for d in detections if not d["cve"])
     assert all(re.fullmatch(r"[0-9a-f]{64}", d["sha256"]) for d in detections)
     assert all(re.fullmatch(r"T\d{4}(\.\d{3})?", d["technique_id"]) for d in detections)
     assert any(d["cve"] in data.KEV_CVES for d in detections)

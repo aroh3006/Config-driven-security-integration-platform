@@ -76,6 +76,26 @@ def _github_rate_headers(headers: dict[str, str], request: Request) -> dict[str,
     }
 
 
+def _jira_rate_headers(headers: dict[str, str]) -> dict[str, str]:
+    """Jira spells these X-RateLimit-*. Reset and reason come only with a 429."""
+    limit, remaining = int(headers["X-Rate-Limit-Limit"]), int(headers["X-Rate-Limit-Remaining"])
+    return {
+        "X-RateLimit-Limit": str(limit),
+        "X-RateLimit-Remaining": str(remaining),
+        "X-RateLimit-NearLimit": "true" if remaining < limit * 0.2 else "false",
+    }
+
+
+def _jira_throttled_headers(headers: dict[str, str], wait: int) -> dict[str, str]:
+    reset = datetime.now(timezone.utc) + timedelta(seconds=wait)
+    return {
+        **headers,
+        "X-RateLimit-Reset": data.iso(reset),
+        "RateLimit-Reason": "jira-burst-based",
+        "Retry-After": str(wait),
+    }
+
+
 def build_router(now: datetime, bad_record_active: Callable[[str], bool]) -> APIRouter:
     users = data.okta_users(now)
     logs = data.okta_logs(now)
@@ -178,6 +198,8 @@ def build_router(now: datetime, bad_record_active: Callable[[str], bool]) -> API
         version = request.headers.get("x-github-api-version")
         if version is not None and version not in GITHUB_API_VERSIONS:
             return _github_error(400, f"Invalid API version provided: {version}"), {}, ""
+        if "authorization" not in request.headers:
+            return _github_error(401, "Requires authentication"), {}, ""
         scheme, _, token = request.headers.get("authorization", "").partition(" ")
         known = same_secret(token, GITHUB_TOKEN) or same_secret(token, GITHUB_TOKEN_NO_ALERTS)
         if scheme.lower() not in ("bearer", "token") or not known:
@@ -287,9 +309,10 @@ def build_router(now: datetime, bad_record_active: Callable[[str], bool]) -> API
         """The last page has no nextPageToken, as Atlassian documents."""
         if not jira_authorized(request):
             return _jira_error(401, "Client must be authenticated to access this resource.")
-        allowed, headers, wait = jira_limit.hit(JIRA_EMAIL)
+        allowed, limits, wait = jira_limit.hit(JIRA_EMAIL)
+        headers = _jira_rate_headers(limits)
         if not allowed:
-            return _jira_error(429, "Rate limit exceeded.", {**headers, "Retry-After": str(wait)})
+            return _jira_error(429, "Rate limit exceeded.", _jira_throttled_headers(headers, wait))
         match = JQL_RE.match((jql or "").strip())
         if not match:
             return _jira_error(

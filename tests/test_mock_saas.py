@@ -349,3 +349,22 @@ def test_cloud_event_is_a_full_cloudtrail_record():
     assert record["eventID"] == event["EventId"]
     finding = next(e for e in data.cloud_events(NOW) if "Cve" in e)
     assert finding["EventSource"] == "securityhub.amazonaws.com"
+
+
+def test_jira_uses_its_own_rate_limit_headers(client):
+    response = client.get(SEARCH, params=JQL, auth=JIRA)
+    assert response.headers["X-RateLimit-Limit"] == "600"
+    assert response.headers["X-RateLimit-NearLimit"] == "false"
+    assert "X-Rate-Limit-Remaining" not in response.headers
+    assert "X-RateLimit-Reset" not in response.headers
+
+
+def test_jira_429_carries_reset_reason_and_retry_after():
+    headers = saas._jira_throttled_headers({"X-RateLimit-Limit": "600"}, 30)
+    assert headers["Retry-After"] == "30" and headers["RateLimit-Reason"] == "jira-burst-based"
+    assert headers["X-RateLimit-Reset"].endswith("Z")
+
+
+def test_github_without_a_token_asks_for_authentication(client):
+    response = client.get(MEMBERS)
+    assert (response.status_code, response.json()["message"]) == (401, "Requires authentication")
