@@ -834,6 +834,8 @@ td.raw pre { max-height: 180px; overflow-y: auto; }
 .suggest div.missing { background: var(--amber-row); border-color: var(--amber-border); }
 .suggest div.missing span { color: var(--amber-text); font-size: 12px; font-weight: 400; }
 
+#f-yaml { white-space: pre; overflow-x: auto; }
+
 /* Data sub navigation */
 
 .subnav { display: flex; flex-wrap: wrap; gap: 8px; }

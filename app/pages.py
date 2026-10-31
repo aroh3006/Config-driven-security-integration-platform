@@ -317,7 +317,18 @@ def build_router(
                 {"raw": _pretty(r), "mapped": _pretty(m)}
                 for r, m in zip(profile["preview_raw"], profile["preview_mapped"])
             ] or [{"raw": _pretty(r), "mapped": ""} for r in profile["preview_raw"]]
-            return add_page(request, filled, sample=sample, profile=profile, preview=preview)
+            paging_guess = profile.get("paging_guess")
+            confidence = profile.get("confidence")
+            return add_page(
+                request,
+                filled,
+                sample=sample,
+                profile=profile,
+                preview=preview,
+                suggested=formbuilder.suggestions(profile, filled.get("entity", "alert")),
+                paging_label=paging_guess.get("type") if isinstance(paging_guess, dict) else paging_guess,
+                confidence_label=confidence.get("level") if isinstance(confidence, dict) else confidence,
+            )
 
         if action == "build" or not form.get("yaml", "").strip():
             built, problems = formbuilder.form_to_yaml(form)

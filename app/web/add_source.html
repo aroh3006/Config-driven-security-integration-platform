@@ -1,101 +1,192 @@
 {% extends "base.html" %}
 {% block title %}Add source{% endblock %}
 {% block content %}
-<h1>Add a source</h1>
-{% if problems %}
-<div class="bad"><strong>Fix these first:</strong>
-  <ul class="plain">{% for p in problems %}<li><code>{{ p.path or "config" }}</code>: {{ p.message }}{% if p.hint %}. {{ p.hint }}{% endif %}</li>{% endfor %}</ul>
+{% set checked_auth = form.auth_type or "none" %}
+{% set checked_paging = form.paging_type or "none" %}
+<div class="head">
+  <div class="head-title" style="flex-direction: column; gap: 2px">
+    <span class="label">[ New source · no code ]</span>
+    <h1>Plug in a source</h1>
+  </div>
+  <ol class="steps" aria-label="Steps">
+    <li><a href="#step-where">1 Where</a></li>
+    <li><a href="#step-login">2 Login</a></li>
+    <li><a href="#step-paging">3 Paging</a></li>
+    <li><a href="#step-often">4 How often</a></li>
+    <li><a href="#step-fields">5 Fields</a></li>
+  </ol>
 </div>
-{% endif %}
-{% if warnings %}
-<div class="warn"><strong>Warnings:</strong>
-  <ul class="plain">{% for p in warnings %}<li><code>{{ p.path or "config" }}</code>: {{ p.message }}{% if p.hint %}. {{ p.hint }}{% endif %}</li>{% endfor %}</ul>
-</div>
-{% endif %}
-{% if valid %}<div class="ok">The config is valid.</div>{% endif %}
-{% if profile %}
-<div class="ok">Draft made from your sample. Confidence {{ profile.confidence.level if profile.confidence is mapping else profile.confidence }}. Paging guess: {{ profile.paging_guess }}. Records path: <code>{{ profile.records_path or "(top level)" }}</code>.
-  {% if profile.unmapped_fields %}Unmapped: {{ profile.unmapped_fields|join(", ") }}.{% endif %}</div>
-{% endif %}
 
-<form method="post" action="/ui/add">
-<fieldset><legend>Start from a sample (optional)</legend>
-  <textarea name="sample" rows="5" placeholder="Paste a sample API response, NDJSON or CSV">{{ sample or "" }}</textarea>
-  <button name="action" value="sample">Draft config from sample</button>
-</fieldset>
+<form class="split" method="post" action="/ui/add" aria-label="New source">
+  {# Pressing Enter in a field builds the YAML. It does not draft from a sample. #}
+  <button class="sr-only" name="action" value="build" tabindex="-1" aria-hidden="true">Build</button>
 
-<fieldset><legend>Source</legend>
-  <label>Name <input name="name" value="{{ form.name }}" placeholder="my-source"></label>
-  <label>Entity <select name="entity">{% for e in ("user","device","alert") %}<option {% if form.entity == e %}selected{% endif %}>{{ e }}</option>{% endfor %}</select></label>
-  <label><input type="checkbox" name="mock" {% if form.mock == "on" %}checked{% endif %}> Mock source</label>
-  <label>Base URL <input name="base_url" size="40" value="{{ form.base_url }}" placeholder="https://api.example.com"></label>
-  <label>Schedule <input name="schedule" value="{{ form.schedule }}" placeholder="every 15m"></label>
-</fieldset>
+  <div class="stack">
+    <fieldset id="step-sample">
+      <legend>Start from a sample (optional)</legend>
+      <div class="field">
+        <label for="f-sample">Sample response. Paste JSON, NDJSON or CSV.</label>
+        <textarea id="f-sample" name="sample" rows="6" placeholder='{ "items": [ { "id": "..." } ] }'>{{ sample or "" }}</textarea>
+      </div>
+      <div class="actions" style="margin-top: 12px">
+        <button name="action" value="sample">Draft config from sample</button>
+      </div>
+      {% if profile %}
+      <div class="ok" style="margin-top: 12px">Draft made from your sample. Confidence {{ confidence_label }}. Paging guess: {{ paging_label }}. Records path: <code>{{ profile.records_path or "(top level)" }}</code>.
+        {% if profile.unmapped_fields %}Unmapped: {{ profile.unmapped_fields|join(", ") }}.{% endif %}</div>
+      {% endif %}
+      {% if suggested %}
+      <div class="stack" style="gap: 6px; margin-top: 12px">
+        <span class="label">Field suggestions</span>
+        <div class="suggest">
+          {% for s in suggested %}
+          {% if s.code %}<div><span>{{ s.field }}</span><code>{{ s.code }}</code></div>
+          {% else %}<div class="missing"><span style="color: var(--text); font-size: 13px; font-weight: 600">{{ s.field }}</span><span>not found · pick one</span></div>{% endif %}
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+    </fieldset>
 
-<fieldset><legend>Login</legend>
-  <label>Type <select name="auth_type">{% for t in auth_types %}<option {% if form.auth_type == t %}selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
-  <label>Secret name <input name="auth_secret" value="{{ form.auth_secret or "" }}" placeholder="okta_key"></label>
-  <div class="row muted">Name only. The value goes in <code>.env</code>. For example, okta_key is read from OKTA_KEY.</div>
-  <label>api_key header <input name="auth_header" value="{{ form.auth_header or "" }}" placeholder="X-API-Key"></label>
-  <label>or query param <input name="auth_query_param" value="{{ form.auth_query_param or "" }}"></label>
-  <label>prefix <input name="auth_prefix" value="{{ form.auth_prefix or "" }}"></label>
-  <label>basic username secret <input name="auth_username_secret" value="{{ form.auth_username_secret or "" }}"></label>
-  <br>
-  <label>oauth2 token URL <input name="auth_token_url" size="36" value="{{ form.auth_token_url or "" }}"></label>
-  <label>client id secret <input name="auth_client_id_secret" value="{{ form.auth_client_id_secret or "" }}"></label>
-  <label>client secret secret <input name="auth_client_secret_secret" value="{{ form.auth_client_secret_secret or "" }}"></label>
-  <label>scope <input name="auth_scope" value="{{ form.auth_scope or "" }}"></label>
-  <label>send as <select name="auth_send_as">{% for s in ("body","basic") %}<option {% if form.auth_send_as == s %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
-</fieldset>
+    <fieldset id="step-where">
+      <legend>1 Where</legend>
+      <div class="form-grid">
+        <div class="field"><label for="f-name">Name</label><input id="f-name" name="name" value="{{ form.name or '' }}" placeholder="my-source"></div>
+        <div class="field"><label for="f-entity">Saves into</label>
+          <select id="f-entity" name="entity">
+            {% for value, text in (("alert", "alerts"), ("user", "users"), ("device", "devices")) %}<option value="{{ value }}"{% if form.entity == value %} selected{% endif %}>{{ text }}</option>{% endfor %}
+          </select></div>
+        <div class="field"><label for="f-base">Base URL</label><input id="f-base" name="base_url" value="{{ form.base_url or '' }}" placeholder="https://api.example.com"></div>
+        <div class="field"><label for="f-path">Path</label><input id="f-path" name="path" value="{{ form.path or '' }}" placeholder="/api/v1/items"></div>
+        <div class="field"><label for="f-format">Format</label>
+          <select id="f-format" name="format">
+            {% for value in ("json", "ndjson", "csv") %}<option value="{{ value }}"{% if form.format == value %} selected{% endif %}>{{ value }}</option>{% endfor %}
+          </select></div>
+        <div class="field"><label for="f-records">Records path</label><input id="f-records" name="records_path" value="{{ form.records_path or '' }}" placeholder="items"></div>
+      </div>
+      <div class="field" style="margin-top: 12px">
+        <label for="f-params">Query params. One <code>key: value</code> per line.</label>
+        <textarea id="f-params" name="params" rows="2">{{ form.params or "" }}</textarea>
+      </div>
+      <input type="hidden" name="method" value="{{ form.method or 'GET' }}">
+      <label class="check"><input type="checkbox" name="mock"{% if form.mock == "on" %} checked{% endif %}> This is a mock source</label>
+      <p class="muted">The form sends GET. For a read-only POST, set <code>method</code> and <code>read_only_post</code> in the YAML box.</p>
+    </fieldset>
 
-<fieldset><legend>Request</legend>
-  <label>Path <input name="path" size="40" value="{{ form.path }}" placeholder="/api/v1/items"></label>
-  <label>Format <select name="format">{% for f in ("json","ndjson","csv") %}<option {% if form.format == f %}selected{% endif %}>{{ f }}</option>{% endfor %}</select></label>
-  <label>Records path <input name="records_path" value="{{ form.records_path }}" placeholder="items"></label>
-  <input type="hidden" name="method" value="{{ form.method }}">
-  <div class="row"><label>Query params (one <code>key: value</code> per line)</label>
-  <textarea name="params" rows="2">{{ form.params }}</textarea></div>
-  <div class="muted">The form sends GET. For a read-only POST, edit the method and <code>read_only_post</code> in the YAML below.</div>
-</fieldset>
+    <fieldset id="step-login">
+      <legend>2 Login</legend>
+      <div class="choice" role="radiogroup" aria-label="Login type">
+        {% for value, text in (("none", "None"), ("api_key", "API key"), ("basic", "Basic"), ("bearer", "Bearer"), ("oauth2_client_credentials", "OAuth2 client credentials")) %}
+        <label><input type="radio" name="auth_type" value="{{ value }}"{% if checked_auth == value %} checked{% endif %}>{{ text }}</label>
+        {% endfor %}
+      </div>
+      <div class="option-set auth-api_key">
+        <div class="field"><label for="f-header">Header</label><input id="f-header" name="auth_header" value="{{ form.auth_header or '' }}" placeholder="X-API-Key"></div>
+        <div class="field"><label for="f-query">Or query param</label><input id="f-query" name="auth_query_param" value="{{ form.auth_query_param or '' }}"></div>
+        <div class="field"><label for="f-prefix">Prefix</label><input id="f-prefix" name="auth_prefix" value="{{ form.auth_prefix or '' }}"></div>
+      </div>
+      <div class="option-set auth-basic">
+        <div class="field"><label for="f-user">Username secret name</label><input id="f-user" name="auth_username_secret" value="{{ form.auth_username_secret or '' }}" placeholder="jira_email"></div>
+      </div>
+      <div class="option-set auth-api_key auth-basic auth-bearer">
+        <div class="field"><label for="f-secret">Secret name</label><input id="f-secret" name="auth_secret" value="{{ form.auth_secret or '' }}" placeholder="okta_key"></div>
+        <p class="muted">Name only. The value goes in <code>.env</code>. For example, okta_key is read from OKTA_KEY.</p>
+      </div>
+      <div class="option-set auth-oauth2_client_credentials">
+        <div class="field"><label for="f-token">Token URL</label><input id="f-token" name="auth_token_url" value="{{ form.auth_token_url or '' }}"></div>
+        <div class="field"><label for="f-cid">Client id secret name</label><input id="f-cid" name="auth_client_id_secret" value="{{ form.auth_client_id_secret or '' }}"></div>
+        <div class="field"><label for="f-csec">Client secret secret name</label><input id="f-csec" name="auth_client_secret_secret" value="{{ form.auth_client_secret_secret or '' }}"></div>
+        <div class="field"><label for="f-scope">Scope</label><input id="f-scope" name="auth_scope" value="{{ form.auth_scope or '' }}"></div>
+        <div class="field"><label for="f-send">Send as</label>
+          <select id="f-send" name="auth_send_as">{% for value in ("body", "basic") %}<option value="{{ value }}"{% if form.auth_send_as == value %} selected{% endif %}>{{ value }}</option>{% endfor %}</select></div>
+      </div>
+    </fieldset>
 
-<fieldset><legend>Paging</legend>
-  <label>Type <select name="paging_type">{% for t in paging_types %}<option {% if form.paging_type == t %}selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
-  <div class="muted">Fill in only the fields for the type you chose.</div>
-  <label>page param <input name="paging_page_param" value="{{ form.paging_page_param or "" }}" placeholder="page"></label>
-  <label>size param <input name="paging_size_param" value="{{ form.paging_size_param or "" }}" placeholder="per_page"></label>
-  <label>size <input name="paging_size" size="5" value="{{ form.paging_size or "" }}"></label>
-  <label>start <input name="paging_start" size="5" value="{{ form.paging_start or "" }}"></label>
-  <br>
-  <label>offset param <input name="paging_offset_param" value="{{ form.paging_offset_param or "" }}" placeholder="startIndex"></label>
-  <label>limit param <input name="paging_limit_param" value="{{ form.paging_limit_param or "" }}"></label>
-  <label>limit <input name="paging_limit" size="5" value="{{ form.paging_limit or "" }}"></label>
-  <label>total path <input name="paging_total_path" value="{{ form.paging_total_path or "" }}"></label>
-  <br>
-  <label>token path <input name="paging_token_path" value="{{ form.paging_token_path or "" }}" placeholder="nextPageToken"></label>
-  <label>token param <input name="paging_token_param" value="{{ form.paging_token_param or "" }}"></label>
-  <label>token in <select name="paging_token_in">{% for s in ("query","body") %}<option {% if form.paging_token_in == s %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
-  <label>next URL path <input name="paging_next_url_path" value="{{ form.paging_next_url_path or "" }}" placeholder="next"></label>
-</fieldset>
+    <fieldset id="step-paging">
+      <legend>3 Paging</legend>
+      <div class="choice" role="radiogroup" aria-label="Paging type">
+        {% for value, text in (("none", "None (one file)"), ("link_header", "Link header"), ("page_number", "Page number"), ("offset", "Offset"), ("body_token", "Token in body"), ("body_next_url", "Next URL in body")) %}
+        <label><input type="radio" name="paging_type" value="{{ value }}"{% if checked_paging == value %} checked{% endif %}>{{ text }}</label>
+        {% endfor %}
+      </div>
+      <div class="option-set paging-page_number">
+        <div class="field"><label for="f-pp">Page param</label><input id="f-pp" name="paging_page_param" value="{{ form.paging_page_param or '' }}" placeholder="page"></div>
+        <div class="field"><label for="f-sp">Size param</label><input id="f-sp" name="paging_size_param" value="{{ form.paging_size_param or '' }}" placeholder="per_page"></div>
+        <div class="field"><label for="f-sz">Size</label><input id="f-sz" name="paging_size" value="{{ form.paging_size or '' }}"></div>
+        <div class="field"><label for="f-st">Start</label><input id="f-st" name="paging_start" value="{{ form.paging_start or '' }}"></div>
+      </div>
+      <div class="option-set paging-offset">
+        <div class="field"><label for="f-op">Offset param</label><input id="f-op" name="paging_offset_param" value="{{ form.paging_offset_param or '' }}" placeholder="startIndex"></div>
+        <div class="field"><label for="f-lp">Limit param</label><input id="f-lp" name="paging_limit_param" value="{{ form.paging_limit_param or '' }}"></div>
+        <div class="field"><label for="f-li">Limit</label><input id="f-li" name="paging_limit" value="{{ form.paging_limit or '' }}"></div>
+        <div class="field"><label for="f-tp">Total path</label><input id="f-tp" name="paging_total_path" value="{{ form.paging_total_path or '' }}"></div>
+      </div>
+      <div class="option-set paging-body_token">
+        <div class="field"><label for="f-tkp">Token path</label><input id="f-tkp" name="paging_token_path" value="{{ form.paging_token_path or '' }}" placeholder="nextPageToken"></div>
+        <div class="field"><label for="f-tkq">Token param</label><input id="f-tkq" name="paging_token_param" value="{{ form.paging_token_param or '' }}"></div>
+        <div class="field"><label for="f-tki">Token in</label>
+          <select id="f-tki" name="paging_token_in">{% for value in ("query", "body") %}<option value="{{ value }}"{% if form.paging_token_in == value %} selected{% endif %}>{{ value }}</option>{% endfor %}</select></div>
+      </div>
+      <div class="option-set paging-body_next_url">
+        <div class="field"><label for="f-nu">Next URL path</label><input id="f-nu" name="paging_next_url_path" value="{{ form.paging_next_url_path or '' }}" placeholder="next"></div>
+      </div>
+    </fieldset>
 
-<fieldset><legend>Mapping to the common schema</legend>
-  <textarea name="map" rows="7">{{ form.map }}</textarea>
-  <button name="action" value="build">Build YAML from the form</button>
-</fieldset>
+    <fieldset id="step-often">
+      <legend>4 How often</legend>
+      <div class="field" style="max-width: 280px"><label for="f-schedule">Schedule</label><input id="f-schedule" name="schedule" value="{{ form.schedule or '' }}" placeholder="every 15m"></div>
+    </fieldset>
 
-<fieldset><legend>Config YAML (this is what gets validated, tested and saved)</legend>
-  <textarea name="yaml" rows="20">{{ form.yaml }}</textarea>
-  <button name="action" value="validate">Validate</button>
-  <button name="action" value="test">Test</button>
-  <button name="action" value="save">Save</button>
-</fieldset>
+    <fieldset id="step-fields">
+      <legend>5 Fields</legend>
+      <div class="field"><label for="f-map">Mapping to the common schema</label>
+        <textarea id="f-map" name="map" rows="7">{{ form.map or "" }}</textarea></div>
+      <div class="actions" style="margin-top: 12px">
+        <button name="action" value="build">Build YAML from the form</button>
+      </div>
+    </fieldset>
+  </div>
+
+  <div class="stack">
+    <section class="card" aria-label="Config being written">
+      <span class="label">[ Config being written{% if form.name %} · {{ form.name }}.yaml{% endif %} ]</span>
+      <label class="sr-only" for="f-yaml">Config YAML</label>
+      <textarea id="f-yaml" name="yaml" rows="22" spellcheck="false">{{ form.yaml or "" }}</textarea>
+      <p class="muted">This box is what gets validated, tested and saved. Build keeps any key the form has no field for.</p>
+    </section>
+
+    {% if problems %}
+    <div class="warn" role="alert">
+      <strong>{{ problems|length }} thing{{ "" if problems|length == 1 else "s" }} to fix.</strong> Fix these first:
+      <ul class="plain">{% for p in problems %}<li><code>{{ p.path or "config" }}</code>: {{ p.message }}{% if p.hint %}. {{ p.hint }}{% endif %}</li>{% endfor %}</ul>
+    </div>
+    {% endif %}
+    {% if warnings %}
+    <div class="warn">
+      <strong>Warnings:</strong>
+      <ul class="plain">{% for p in warnings %}<li><code>{{ p.path or "config" }}</code>: {{ p.message }}{% if p.hint %}. {{ p.hint }}{% endif %}</li>{% endfor %}</ul>
+    </div>
+    {% endif %}
+    {% if valid %}<div class="ok">The config is valid.</div>{% endif %}
+
+    <div class="actions">
+      <button name="action" value="validate">Validate</button>
+      <button name="action" value="test">Test connection</button>
+      <button class="primary" name="action" value="save">Save · plug it in</button>
+    </div>
+  </div>
 </form>
 
 {% if preview %}
-<h2>Sample preview</h2>
-<div class="wrap"><table>
-  <tr><th style="width:50%">Raw</th><th>Mapped</th></tr>
-  {% for pair in preview %}<tr><td><pre>{{ pair.raw }}</pre></td><td><pre>{{ pair.mapped }}</pre></td></tr>{% endfor %}
-</table></div>
+<section class="card" aria-label="Sample preview">
+  <span class="label">[ Sample preview ]</span>
+  <div class="wrap"><table>
+    <thead><tr><th style="width: 50%">Raw</th><th>Mapped</th></tr></thead>
+    <tbody>
+    {% for pair in preview %}<tr><td><pre>{{ pair.raw }}</pre></td><td><pre>{{ pair.mapped }}</pre></td></tr>{% endfor %}
+    </tbody>
+  </table></div>
+</section>
 {% endif %}
 {% if test %}{% include "_test_result.html" %}{% endif %}
 {% endblock %}
