@@ -1,3 +1,4 @@
+import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -372,6 +373,172 @@ def test_yaml_round_trips_through_the_form():
     assert config["auth"]["client_id_secret"] == "mock_edr_client_id"
     assert config["pagination"]["token_path"] == "meta.pagination.next"
     assert config["map"]["hostname"] == "hostname"
+
+
+FULL_CONFIG = """\
+name: kept
+entity: alert
+mock: false
+description: keep me
+source:
+  type: http
+  base_url: https://api.example.com
+  allow_hosts: [api.example.com, auth.example.com]
+  allow_private_network: true
+auth:
+  type: basic
+  username: plain-user
+  username_secret: site_email
+  secret: site_token
+auth_failure: { header: X-Seraph-LoginReason, contains: AUTHENTICATED_FAILED }
+request:
+  method: POST
+  read_only_post: true
+  path: /search
+  headers: { Accept: application/json }
+  body: { size: 50 }
+  format: json
+  records_path: issues
+pagination:
+  type: body_token
+  token_path: next
+  token_param: next
+  token_in: body
+  stop_path: isLast
+schedule: every 1h
+retry: { delays_s: [1, 2] }
+rate_limit: { max_rps: 1 }
+incremental: { field: updated, param: since, template: "{checkpoint}" }
+limits: { max_pages: 5 }
+required: [id]
+notify: { slack_after_failures: 2 }
+brand_new_key: { nested: true }
+map:
+  id: key
+  timestamp: { path: created, transform: to_utc }
+"""
+
+
+def rebuild(text, **changes):
+    form = {**formbuilder.yaml_to_form(text), **changes}
+    built, problems = formbuilder.form_to_yaml(form)
+    assert problems == []
+    return yaml.safe_load(built)
+
+
+def test_build_keeps_auth_failure():
+    assert rebuild(FULL_CONFIG)["auth_failure"] == {"header": "X-Seraph-LoginReason", "contains": "AUTHENTICATED_FAILED"}
+
+
+def test_build_keeps_every_key_the_form_does_not_know():
+    original = yaml.safe_load(FULL_CONFIG)
+    assert rebuild(FULL_CONFIG) == original
+
+
+def test_build_applies_form_edits_on_top_of_kept_keys():
+    config = rebuild(FULL_CONFIG, schedule="every 5m", path="/other", auth_secret="new_token")
+    assert config["schedule"] == "every 5m"
+    assert config["request"]["path"] == "/other"
+    assert config["request"]["read_only_post"] is True
+    assert config["auth"]["secret"] == "new_token"
+    assert config["auth"]["username"] == "plain-user"
+    assert config["retry"] == {"delays_s": [1, 2]}
+
+
+def test_clearing_a_form_field_removes_that_key():
+    assert "params" not in rebuild(FULL_CONFIG.replace("  path: /search", "  path: /search\n  params: { a: 1 }"), params="")["request"]
+    assert "prefix" not in rebuild(FULL_CONFIG.replace("type: basic", "type: api_key\n  header: H\n  prefix: 'x '"), auth_type="api_key", auth_prefix="")["auth"]
+
+
+def test_changing_login_or_paging_type_drops_the_old_keys():
+    config = rebuild(FULL_CONFIG, auth_type="bearer", auth_secret="tok", paging_type="link_header")
+    assert config["auth"] == {"type": "bearer", "secret": "tok"}
+    assert config["pagination"] == {"type": "link_header"}
+    assert config["auth_failure"]["contains"] == "AUTHENTICATED_FAILED"
+
+
+def test_allowlist_is_kept_for_the_same_host_and_reset_for_a_new_one():
+    assert rebuild(FULL_CONFIG)["source"]["allow_hosts"] == ["api.example.com", "auth.example.com"]
+    moved = rebuild(FULL_CONFIG, base_url="https://new.example.com")
+    assert moved["source"]["allow_hosts"] == ["new.example.com"]
+    assert moved["source"]["allow_private_network"] is True
+
+
+def test_build_keeps_a_file_source():
+    text = (REPO_CONFIGS / "devices-file.yaml").read_text(encoding="utf-8")
+    config = rebuild(text)
+    assert config["source"] == {"type": "file", "path": "data/devices.csv"}
+    assert "path" not in config["request"]
+
+
+@pytest.mark.parametrize("path", sorted(REPO_CONFIGS.glob("*.yaml")), ids=lambda p: p.stem)
+def test_every_repo_config_survives_form_and_back(path):
+    text = path.read_text(encoding="utf-8")
+    config = yaml.safe_load(text)
+    assert rebuild(text) == {**config, "mock": bool(config.get("mock"))} | {"request": {**config["request"], **_request_defaults(config)}}
+
+
+def _request_defaults(config):
+    request = config["request"]
+    defaults = {"method": "GET", "records_path": ""}
+    return {key: request.get(key, value) for key, value in defaults.items()}
+
+
+def test_unreadable_yaml_box_is_reported_and_build_still_works():
+    built, problems = formbuilder.form_to_yaml({**FORM, "yaml": "[unclosed"})
+    assert [p["path"] for p in problems] == ["yaml"]
+    assert yaml.safe_load(built)["name"] == "kev-live"
+
+
+def test_add_page_build_keeps_auth_failure(client):
+    form = {**formbuilder.yaml_to_form(FULL_CONFIG), "action": "build", "sample": ""}
+    page = client.post("/ui/add", data=form).text
+    assert "AUTHENTICATED_FAILED" in page and "brand_new_key" in page
+
+
+def test_add_page_has_every_field_and_action(client):
+    page = client.get("/ui/add").text
+    for name in (
+        "name", "entity", "mock", "base_url", "schedule", "auth_type", "auth_secret", "auth_header",
+        "auth_query_param", "auth_prefix", "auth_username_secret", "auth_token_url", "auth_client_id_secret",
+        "auth_client_secret_secret", "auth_scope", "auth_send_as", "path", "format", "records_path", "method",
+        "params", "paging_type", "paging_page_param", "paging_size_param", "paging_size", "paging_start",
+        "paging_offset_param", "paging_limit_param", "paging_limit", "paging_total_path", "paging_token_path",
+        "paging_token_param", "paging_token_in", "paging_next_url_path", "map", "yaml", "sample",
+    ):
+        assert f'name="{name}"' in page, name
+    for action in ("sample", "build", "validate", "test", "save"):
+        assert f'value="{action}"' in page, action
+
+
+def test_add_page_inputs_have_labels(client):
+    page = client.get("/ui/add").text
+    ids = re.findall(r'<(?:input|select|textarea) id="([^"]+)"', page)
+    assert ids
+    for field_id in ids:
+        assert f'<label for="{field_id}"' in page or f'for="{field_id}"' in page, field_id
+
+
+def test_add_page_secret_field_appears_once(client):
+    assert client.get("/ui/add").text.count('name="auth_secret"') == 1
+
+
+def test_add_page_shows_field_suggestions(client):
+    page = client.post("/ui/add", data={"action": "sample", "sample": '{"items": [{"id": 1}]}', "entity": "alert"}).text
+    assert "Field suggestions" in page
+    assert "not found · pick one" in page
+
+
+def test_suggestions_handle_every_guess_shape():
+    rows = formbuilder.suggestions(
+        {"guesses": {"id": {"spec": "cveID"}, "timestamp": {"spec": {"path": "added", "transform": "to_utc"}}, "type": "kind"}},
+        "alert",
+    )
+    by_field = {row["field"]: row["code"] for row in rows}
+    assert by_field["id"] == "cveID"
+    assert "to_utc" in by_field["timestamp"]
+    assert by_field["type"] == "kind"
+    assert by_field["severity"] is None
 
 
 def test_yaml_to_form_survives_bad_yaml():

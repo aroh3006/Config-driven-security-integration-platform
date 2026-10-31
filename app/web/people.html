@@ -1,18 +1,28 @@
 {% extends "base.html" %}
 {% block title %}People{% endblock %}
 {% block content %}
-<h1>One view per person</h1>
-<form method="get" class="row">
-  <label>Person <select name="email"><option value="">Choose an email</option>
-    {% for e in emails %}<option {% if e == email %}selected{% endif %}>{{ e }}</option>{% endfor %}</select></label>
-  <button>Show</button>
-</form>
+<div class="head"><div class="head-title"><h1>One view per person</h1><span class="muted">Matched on email</span></div></div>
+{% set tab = "people" %}{% include "_data_nav.html" %}
+<section class="card" aria-label="Choose a person">
+  <form class="filter" method="get">
+    <div class="field"><label for="p-email">Person</label>
+      <select id="p-email" name="email"><option value="">Choose an email</option>
+        {% for e in emails %}<option value="{{ e }}"{% if e == email %} selected{% endif %}>{{ e }}</option>{% endfor %}</select></div>
+    <button>Show</button>
+  </form>
+</section>
 {% if records %}
-<h2>Accounts</h2>
-{% with table_rows=records.users, table_columns=user_columns %}{% include "_rows.html" %}{% endwith %}
-<h2>Devices</h2>
-{% with table_rows=records.devices, table_columns=device_columns %}{% include "_rows.html" %}{% endwith %}
-<h2>Alerts that mention this email</h2>
-{% with table_rows=records.alerts, table_columns=alert_columns %}{% include "_rows.html" %}{% endwith %}
+<section class="card" aria-label="Accounts">
+  <span class="label">[ Accounts ]</span>
+  {% set table_rows = records.users %}{% set table_columns = user_columns %}{% include "_rows.html" %}
+</section>
+<section class="card" aria-label="Devices">
+  <span class="label">[ Devices ]</span>
+  {% set table_rows = records.devices %}{% set table_columns = device_columns %}{% include "_rows.html" %}
+</section>
+<section class="card" aria-label="Alerts">
+  <span class="label">[ Alerts that mention this email ]</span>
+  {% set table_rows = records.alerts %}{% set table_columns = alert_columns %}{% include "_rows.html" %}
+</section>
 {% endif %}
 {% endblock %}

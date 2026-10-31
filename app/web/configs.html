@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% from "_icons.html" import status %}
+{% block title %}Configs{% endblock %}
+{% block content %}
+<div class="head"><div class="head-title"><h1>Configs</h1><span class="muted">One YAML file per source</span></div><a class="btn" href="/ui/add">Plug in a source</a></div>
+{% if rows %}
+<div class="config-grid">
+  {% for row in rows %}
+  <a class="card config-card" href="/ui/connector/{{ row.name|urlencode }}/config">
+    <span class="mono">{{ row.name }}.yaml</span>
+    <span class="note">{{ row.detail }} · {{ row.entity }}</span>
+    <span>{{ status(row.status) }}{% if row.mock %} <span class="badge mock">mock</span>{% endif %}</span>
+  </a>
+  {% endfor %}
+</div>
+{% else %}<section class="card"><p class="note">No connectors yet. <a href="/ui/add">Add a source</a>.</p></section>{% endif %}
+{% endblock %}

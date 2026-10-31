@@ -32,6 +32,9 @@ from .security import Resolver, check_url, safe_file_path
 log = logging.getLogger("engine.http")
 USER_AGENT = "mitigata-config-connector/0.1"
 
+# Called when a connector starts waiting: hook(connector_name, seconds, reason).
+on_wait: list[Callable[[str, float, str], None]] = []
+
 
 @dataclass
 class RunStats:
@@ -142,7 +145,7 @@ class HttpClient:
                 raise RetryExhausted(f"{kind} on {self._host(url)} after {attempt} attempts") from None
 
             self._log(method, str(resp.request.url) if resp.request else url, None, resp.status_code, started, attempt,
-                      "injected" if fault else "")
+                      "injected" if fault else "", retry_after=resp.headers.get("Retry-After"))
             self._note_rate_headers(resp)
             self._check_auth_failure(resp, url)
             status = resp.status_code
@@ -162,7 +165,7 @@ class HttpClient:
                 wait = self._rate_limit_wait(resp)
                 if wait is None:
                     wait = delays[min(error_retries, len(delays) - 1)] if delays else 1.0
-                self._wait(min(wait, cfg.rate_limit.max_wait_s))
+                self._wait(min(wait, cfg.rate_limit.max_wait_s), reason="rate limit")
                 continue
             if status >= 500:
                 if error_retries < len(delays):
@@ -312,13 +315,20 @@ class HttpClient:
     def _delay(self, base: float) -> float:
         return base * random.uniform(0.5, 1.5) if self.cfg.retry.jitter else base
 
-    def _wait(self, seconds: float, kind: str = "retry") -> None:
+    def _wait(self, seconds: float, kind: str = "retry", reason: str = "") -> None:
         self.stats.retries += 1 if kind == "retry" else 0
         self.stats.waits.append(round(seconds, 3))
+        if self.stats.requests:
+            self.stats.requests[-1]["waited_s"] = round(seconds, 3)
         log.info("%s: waiting %.1fs (%s)", self.cfg.name, seconds, kind)
+        for hook in list(on_wait):
+            try:
+                hook(self.cfg.name, seconds, reason or kind)
+            except Exception:  # a broken hook must never break a run
+                log.exception("on_wait hook failed")
         self.sleep(seconds)
 
-    def _log(self, method, url, params, status, started, attempt, note="") -> None:
+    def _log(self, method, url, params, status, started, attempt, note="", retry_after=None) -> None:
         if params:
             url = str(httpx.URL(url).copy_merge_params(params))
         entry = {
@@ -327,7 +337,11 @@ class HttpClient:
             "status": status,
             "ms": int((time.perf_counter() - started) * 1000),
             "attempt": attempt,
+            "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "auth_type": self.cfg.auth.type,  # the type name only, never a credential
         }
+        if retry_after:
+            entry["retry_after"] = mask(str(retry_after))[:64]
         if note:
             entry["note"] = note
         self.stats.requests.append(entry)

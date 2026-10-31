@@ -7,6 +7,7 @@ with the network off during the failure demo.
 from __future__ import annotations
 
 import json
+import threading
 from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import quote
@@ -16,7 +17,18 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
-from app import connectors, engine_client as engine, formbuilder, health
+from app import (
+    connectors,
+    engine_client as engine,
+    formbuilder,
+    health,
+    live,
+    patch,
+    scenarios,
+    sidebar,
+    takeapart,
+    theme,
+)
 from store import db
 
 ACTOR = "web"
@@ -27,10 +39,37 @@ PAGING_TYPES = ("none", "link_header", "page_number", "offset", "body_token", "b
 ENTITY_PAGES = {"users": "user", "devices": "device", "alerts": "alert"}
 
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "web"))
+templates.env.globals["tone"] = theme.tone
+# Changes when the stylesheet changes. A browser then never shows an old copy.
+templates.env.globals["css_version"] = int((Path(__file__).parent / "static" / "otto.css").stat().st_mtime)
+
+HOME_ENGINE = {
+    "eyebrow": "The engine",
+    "title": "Same rules for every source",
+    "note": "",
+    "chips": ("login", "paging", "retries", "rate limits", "mapping", "secrets"),
+}
 
 
-def _render(request: Request, name: str, **context: Any) -> HTMLResponse:
-    context.update(stubbed=engine.stubbed_functions(), msg=request.query_params.get("msg"))
+def _spawn(target: Callable[[], None]) -> None:
+    """Start a long run on its own thread. A closed browser tab cannot cancel it."""
+    threading.Thread(target=target, daemon=True).start()
+
+
+def _render(
+    request: Request,
+    name: str,
+    nav: str = "",
+    current: str | None = None,
+    **context: Any,
+) -> HTMLResponse:
+    context.update(
+        stubbed=engine.stubbed_functions(),
+        msg=request.query_params.get("msg"),
+        nav=nav,
+        current=current,
+        side=sidebar.build(request.query_params.get("find")),
+    )
     return templates.TemplateResponse(request, name, context)
 
 
@@ -71,16 +110,141 @@ def build_router(
         return _render(
             request,
             "connector.html",
+            nav="sources",
+            current=name,
             connector=connector,
             row=health.connector_row(connector),
             runs=db.list_runs(name, limit=20),
             quarantine=db.list_quarantine(name, limit=50),
             test=test,
+            view=scenarios.build(name, connector, [], live.snapshot(name)),
+        )
+
+    @router.get("/ui/connector/{name}/config", response_class=HTMLResponse)
+    def config_apart_page(request: Request, name: str) -> HTMLResponse:
+        connector = db.get_connector(name)
+        if connector is None:
+            raise HTTPException(404, f"unknown connector {name!r}")
+        checked = engine.validate_config(connector["config_yaml"])
+        return _render(
+            request,
+            "config_apart.html",
+            nav="configs",
+            current=name,
+            connector=connector,
+            parts=takeapart.split(connector["config_yaml"]),
+            errors=connectors.errors_only(checked),
+            warnings=connectors.warnings_only(checked),
         )
 
     @router.get("/", response_class=HTMLResponse)
     def health_page(request: Request) -> HTMLResponse:
-        return _render(request, "health.html", rows=health.health_rows())
+        rows = health.health_rows()
+        return _render(
+            request,
+            "health.html",
+            nav="home",
+            rows=rows,
+            p=patch.build(rows),
+            engine=HOME_ENGINE,
+            healthy=sum(1 for row in rows if row["status"] == "healthy"),
+        )
+
+    def tracked_run(name: str) -> None:
+        """Run a connector and always mark it finished. Unused faults are cleared."""
+        try:
+            run_and_alert(name)
+        finally:
+            engine.clear_fault(name)
+            live.finish(name)
+
+    @router.get("/ui/live")
+    def live_entry() -> Response:
+        """Open the connector most worth watching."""
+        rows = health.health_rows()
+        if not rows:
+            return _redirect("/ui/add", "Add a source first")
+        worst = patch.choose(rows, 1)[0]["name"]
+        return RedirectResponse(f"/ui/live/{quote(worst)}", status_code=303)
+
+    @router.get("/ui/live/{name}", response_class=HTMLResponse)
+    def live_page(request: Request, name: str) -> HTMLResponse:
+        connector = db.get_connector(name)
+        if connector is None:
+            raise HTTPException(404, f"unknown connector {name!r}")
+        rows = health.health_rows()
+        row = next(item for item in rows if item["name"] == name)
+        state = live.snapshot(name)
+        view = scenarios.build(name, connector, rows, state)
+        shown = [dict(item) for item in rows]
+        if state["waiting"]:
+            next(item for item in shown if item["name"] == name)["status"] = "waiting"
+        elif state["active"]:
+            next(item for item in shown if item["name"] == name)["status"] = "running"
+        tray = None
+        if view["kind"] == "bad_record":
+            tray = {"href": "/ui/quarantine", "count": view["quarantine_total"]}
+        return _render(
+            request,
+            "live.html",
+            nav="live",
+            current=name,
+            connector=connector,
+            row=row,
+            view=view,
+            scenarios=scenarios.SCENARIOS,
+            refresh=state["active"] or (row["running"] and row["recent"]),
+            p=patch.build(shown, limit=4, focus=name, tag=view["status"]["tag"], show_slot=False),
+            engine={
+                "eyebrow": "Engine",
+                "title": view["status"]["engine"][0],
+                "note": view["status"]["engine"][1],
+                "chips": (),
+                "tray": tray,
+            },
+        )
+
+    @router.post("/ui/live/{name}/scenario")
+    async def start_scenario(request: Request, name: str) -> Response:
+        """Set the fault for one named scenario, then run in the background."""
+        connector = db.get_connector(name)
+        if connector is None:
+            raise HTTPException(404, f"unknown connector {name!r}")
+        key = str((await request.form()).get("scenario"))
+        scenario = scenarios.SCENARIOS.get(key)
+        if scenario is None:
+            raise HTTPException(400, f"unknown scenario {key!r}")
+        back = f"/ui/live/{quote(name)}"
+        if connector["status"] == "paused":
+            return _redirect(back, f"{name} is paused. Resume it to run a scenario.")
+        if connector["approved_hash"] != connector["config_hash"]:
+            return _redirect(back, f"{name} has a changed config. Approve it to run a scenario.")
+        if not live.begin(name, key):
+            return _redirect(back, f"{name} is already running. Wait for it to finish.")
+        if scenario["mode"] == "off":
+            engine.clear_fault(name)
+        else:
+            engine.set_fault(name, scenario["mode"])
+        db.audit(ACTOR, "scenario.start", name, key)
+        _spawn(lambda: tracked_run(name))
+        return RedirectResponse(back, status_code=303)
+
+    @router.get("/ui/configs", response_class=HTMLResponse)
+    def configs_page(request: Request) -> HTMLResponse:
+        return _render(request, "configs.html", nav="configs", rows=health.health_rows())
+
+    @router.get("/ui/quarantine", response_class=HTMLResponse)
+    def quarantine_page(request: Request, connector: str | None = None) -> HTMLResponse:
+        items = db.list_quarantine(connector or None, limit=200)
+        return _render(
+            request,
+            "quarantine.html",
+            nav="quarantine",
+            items=items,
+            waiting=sum(1 for item in items if not item["replayed"]),
+            connector=connector or "",
+            connector_names=[row["name"] for row in db.list_connectors()],
+        )
 
     @router.get("/ui/connector/{name}", response_class=HTMLResponse)
     def connector_view(request: Request, name: str) -> HTMLResponse:
@@ -96,8 +260,11 @@ def build_router(
         if action == "test":
             return connector_page(request, name, test=_test_view(engine.test_connection(name)))
         if action == "run":
-            background.add_task(run_and_alert, name)
-            message = f"{name}: run started"
+            if live.begin(name):
+                background.add_task(tracked_run, name)
+                message = f"{name}: run started"
+            else:
+                message = f"{name}: already running"
         elif action == "pause":
             engine.pause(name)
             db.audit(ACTOR, "connector.pause", name)
@@ -125,6 +292,7 @@ def build_router(
         return _render(
             request,
             "add_source.html",
+            nav="sources",
             form=form,
             auth_types=AUTH_TYPES,
             paging_types=PAGING_TYPES,
@@ -158,7 +326,18 @@ def build_router(
                 {"raw": _pretty(r), "mapped": _pretty(m)}
                 for r, m in zip(profile["preview_raw"], profile["preview_mapped"])
             ] or [{"raw": _pretty(r), "mapped": ""} for r in profile["preview_raw"]]
-            return add_page(request, filled, sample=sample, profile=profile, preview=preview)
+            paging_guess = profile.get("paging_guess")
+            confidence = profile.get("confidence")
+            return add_page(
+                request,
+                filled,
+                sample=sample,
+                profile=profile,
+                preview=preview,
+                suggested=formbuilder.suggestions(profile, filled.get("entity", "alert")),
+                paging_label=paging_guess.get("type") if isinstance(paging_guess, dict) else paging_guess,
+                confidence_label=confidence.get("level") if isinstance(confidence, dict) else confidence,
+            )
 
         if action == "build" or not form.get("yaml", "").strip():
             built, problems = formbuilder.form_to_yaml(form)
@@ -194,6 +373,7 @@ def build_router(
         return _render(
             request,
             "records.html",
+            nav="data",
             entity=entity,
             columns=("source", "id", *db.ENTITY_COLUMNS[entity], "fetched_at"),
             rows=db.query_records(entity, source=source or None, q=q or None),
@@ -207,6 +387,7 @@ def build_router(
         return _render(
             request,
             "people.html",
+            nav="data",
             emails=db.list_emails(),
             email=email or "",
             records=db.person_records(email) if email else None,
@@ -220,6 +401,7 @@ def build_router(
         return _render(
             request,
             "kev.html",
+            nav="data",
             rows=db.kev_matches(KEV_SOURCE),
             kev_count=db.count_records("alert", KEV_SOURCE),
             kev_source=KEV_SOURCE,
@@ -229,7 +411,7 @@ def build_router(
     @router.get("/ui/demo", response_class=HTMLResponse)
     def demo_page(request: Request) -> HTMLResponse:
         return _render(
-            request, "demo.html", connectors=db.list_connectors(), modes=FAULT_MODES
+            request, "demo.html", nav="live", connectors=db.list_connectors(), modes=FAULT_MODES
         )
 
     @router.post("/ui/demo")
@@ -251,6 +433,6 @@ def build_router(
 
     @router.get("/ui/audit", response_class=HTMLResponse)
     def audit_page(request: Request) -> HTMLResponse:
-        return _render(request, "audit.html", rows=db.list_audit())
+        return _render(request, "audit.html", nav="audit", rows=db.list_audit())
 
     return router

@@ -10,6 +10,7 @@ import yaml
 
 from app.connectors import NAME_RE
 from app.health import parse_schedule
+from store.db import ENTITY_COLUMNS
 
 SECRET_NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
@@ -42,6 +43,7 @@ AUTH_FIELDS = {
 }
 SECRET_FIELDS = ("secret", "username_secret", "client_id_secret", "client_secret_secret")
 NUMBER_FIELDS = ("size", "start", "limit")
+REQUEST_OWNED = ("method", "path", "params", "format", "records_path")
 
 
 def default_form() -> dict[str, str]:
@@ -89,16 +91,68 @@ def _pick(form: dict[str, str], prefix: str, fields: tuple[str, ...]) -> dict[st
     return picked
 
 
+def _current_config(form: dict[str, str], problems: list[dict[str, str]]) -> dict[str, Any]:
+    """Read the YAML box. Keys the form has no field for are kept from here."""
+    text = form.get("yaml", "")
+    if not text.strip():
+        return {}
+    try:
+        value = yaml.safe_load(text)
+    except yaml.YAMLError:
+        problems.append(
+            _problem("yaml", "the YAML box could not be read", "Keys the form has no field for were not kept.")
+        )
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def _section(current: dict[str, Any], key: str) -> dict[str, Any]:
+    value = current.get(key)
+    return dict(value) if isinstance(value, dict) else {}
+
+
+def _typed_section(
+    current: dict[str, Any], key: str, kind: str, picked: dict[str, Any], owned: tuple[str, ...]
+) -> dict[str, Any]:
+    """Merge form fields over the same section of the YAML box.
+
+    Extra keys survive while the type stays the same. Choosing another type
+    starts clean, because the old keys would not be valid for it.
+    """
+    old = _section(current, key)
+    extras = {}
+    if old.get("type", "none") == kind:
+        extras = {k: v for k, v in old.items() if k != "type" and k not in owned}
+    return {"type": kind, **extras, **picked}
+
+
+def _source(current: dict[str, Any], base_url: str, host: str | None) -> dict[str, Any]:
+    """Keep extra source keys. The allowlist resets if the host changes."""
+    old = _section(current, "source")
+    if old.get("type") == "file" and not base_url:
+        return old
+    allowed = [host] if host else []
+    old_hosts = old.get("allow_hosts")
+    if host and isinstance(old_hosts, list) and urlsplit(str(old.get("base_url", ""))).hostname == host:
+        allowed = old_hosts if host in old_hosts else [host, *old_hosts]
+    return {**old, "type": "http", "base_url": base_url, "allow_hosts": allowed}
+
+
 def form_to_yaml(form: dict[str, str]) -> tuple[str, list[dict[str, str]]]:
-    """Build config YAML from form fields. Returns (yaml_text, problems)."""
+    """Build config YAML from form fields. Returns (yaml_text, problems).
+
+    Any key in the YAML box that the form has no field for is kept as it is.
+    """
     problems: list[dict[str, str]] = []
+    current = _current_config(form, problems)
 
     name = form.get("name", "").strip()
     if not NAME_RE.match(name):
         problems.append(_problem("name", "name is missing or has bad characters", "Use my-source."))
     base_url = form.get("base_url", "").strip()
     parts = urlsplit(base_url)
-    if parts.scheme not in ("http", "https") or not parts.hostname:
+    is_file = _section(current, "source").get("type") == "file" and not base_url
+    if not is_file and (parts.scheme not in ("http", "https") or not parts.hostname):
         problems.append(
             _problem("source.base_url", "must be a full URL", "Use https://api.example.com.")
         )
@@ -107,8 +161,8 @@ def form_to_yaml(form: dict[str, str]) -> tuple[str, list[dict[str, str]]]:
         problems.append(_problem("schedule", "cannot read the schedule", "Use every 15m."))
 
     auth_type = form.get("auth_type", "none")
-    auth: dict[str, Any] = {"type": auth_type}
-    auth.update(_pick(form, "auth_", AUTH_FIELDS.get(auth_type, ())))
+    auth_owned = AUTH_FIELDS.get(auth_type, ())
+    auth = _typed_section(current, "auth", auth_type, _pick(form, "auth_", auth_owned), auth_owned)
     for field in SECRET_FIELDS:
         if field in auth and not SECRET_NAME_RE.match(str(auth[field])):
             problems.append(
@@ -120,39 +174,59 @@ def form_to_yaml(form: dict[str, str]) -> tuple[str, list[dict[str, str]]]:
             )
 
     paging_type = form.get("paging_type", "none")
-    pagination: dict[str, Any] = {"type": paging_type}
-    pagination.update(_pick(form, "paging_", PAGING_FIELDS.get(paging_type, ())))
+    paging_owned = PAGING_FIELDS.get(paging_type, ())
+    pagination = _typed_section(
+        current, "pagination", paging_type, _pick(form, "paging_", paging_owned), paging_owned
+    )
 
     params = _yaml_mapping(form.get("params", ""), "request.params", problems)
     mapping = _yaml_mapping(form.get("map", ""), "map", problems)
     if not mapping:
         problems.append(_problem("map", "map is empty", "Add at least `id: some_field`."))
 
-    request: dict[str, Any] = {
-        "method": form.get("method") or "GET",
-        "path": form.get("path", "").strip() or "/",
-    }
+    request = {k: v for k, v in _section(current, "request").items() if k not in REQUEST_OWNED}
+    path = form.get("path", "").strip()
+    built_request: dict[str, Any] = {"method": form.get("method") or "GET"}
+    if path or not is_file:
+        built_request["path"] = path or "/"
     if params:
-        request["params"] = params
-    request["format"] = form.get("format") or "json"
-    request["records_path"] = form.get("records_path", "").strip()
+        built_request["params"] = params
+    built_request["format"] = form.get("format") or "json"
+    built_request["records_path"] = form.get("records_path", "").strip()
 
     config: dict[str, Any] = {
         "name": name,
         "entity": form.get("entity") or "alert",
         "mock": form.get("mock") == "on",
-        "source": {
-            "type": "http",
-            "base_url": base_url,
-            "allow_hosts": [parts.hostname] if parts.hostname else [],
-        },
+        "source": _source(current, base_url, parts.hostname),
         "auth": auth,
-        "request": request,
+        "request": {**built_request, **request},
         "pagination": pagination,
         "schedule": schedule,
         "map": mapping,
     }
+    for key, value in current.items():
+        config.setdefault(key, value)
     return yaml.safe_dump(config, sort_keys=False, default_flow_style=False), problems
+
+
+def suggestions(profile: dict[str, Any], entity: str) -> list[dict[str, Any]]:
+    """One row per schema field: what the profiler picked. A field with no match has no code."""
+    table = {"user": "users", "device": "devices", "alert": "alerts"}.get(entity, "alerts")
+    guesses = profile.get("guesses") or {}
+    rows = []
+    for field in ("id", *ENTITY_COLUMNS[table]):
+        guess = guesses.get(field)
+        if guess is None:
+            rows.append({"field": field, "code": None})
+            continue
+        spec = guess.get("spec") if isinstance(guess, dict) else guess
+        if isinstance(spec, dict) and set(spec) == {"path"}:
+            spec = spec["path"]
+        if not isinstance(spec, str):
+            spec = yaml.safe_dump(spec, default_flow_style=True, sort_keys=False).strip()
+        rows.append({"field": field, "code": spec})
+    return rows
 
 
 def yaml_to_form(text: str) -> dict[str, str]:

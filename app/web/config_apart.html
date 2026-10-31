@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% from "_icons.html" import status %}
+{% block title %}{{ connector.name }}.yaml{% endblock %}
+{% block content %}
+<div class="head">
+  <div class="head-title">
+    <h1>{{ connector.name }}.yaml</h1>
+    {% if errors %}
+    <span class="t-red">Invalid · {{ errors|length }} error{{ "" if errors|length == 1 else "s" }}</span>
+    {% else %}
+    <span class="t-teal">Valid · 0 errors</span>
+    {% endif %}
+    {% if warnings %}<span class="t-amber">{{ warnings|length }} warning{{ "" if warnings|length == 1 else "s" }}</span>{% endif %}
+  </div>
+  <div class="actions">
+    <a class="pill" href="/ui/live/{{ connector.name|urlencode }}">Show request</a>
+    <a class="pill on" href="/ui/connector/{{ connector.name|urlencode }}/config" aria-current="page">Take config apart</a>
+    <a class="pill" href="/ui/connector/{{ connector.name|urlencode }}">Connector</a>
+  </div>
+</div>
+
+{% if errors or warnings %}
+<div class="{{ 'bad' if errors else 'warn' }}">
+  <ul class="plain">{% for p in errors + warnings %}<li><code>{{ p.path or "config" }}</code>: {{ p.message }}{% if p.hint %}. {{ p.hint }}{% endif %}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
+<section class="apart" aria-label="Config taken apart">
+  <div class="apart-word" aria-hidden="true">CONFIG</div>
+  <div class="label-row"><span class="label">[ One file · five answers ]</span><span class="label">[ Each part drives one piece of the engine ]</span></div>
+
+  {% if parts.error %}
+  <div class="bad">{{ parts.error }}</div>
+  <pre>{{ connector.config_yaml }}</pre>
+  {% else %}
+  {% for block in parts.blocks %}
+  <div class="apart-row">
+    <div class="block">
+      <span class="label">{{ block.number }} · {{ block.title }}</span>
+      <code>{{ block.code }}</code>
+    </div>
+    <div class="wire" aria-hidden="true"></div>
+    <div class="part">
+      <b>{{ block.part }}</b>
+      <span>{{ block.does }}</span>
+    </div>
+  </div>
+  {% endfor %}
+
+  <div class="caption">
+    <h2>Change a block, not code</h2>
+    <p class="note">Retries, rate limits and secret handling run the same way for every source. These keys only tune them.</p>
+    {% if parts.tuning %}<pre>{{ parts.tuning }}</pre>{% endif %}
+    {% if parts.other %}<span class="label">Other keys in this file</span><pre>{{ parts.other }}</pre>{% endif %}
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

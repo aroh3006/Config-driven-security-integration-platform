@@ -13,6 +13,22 @@ from store import db
 SCHEDULE_RE = re.compile(r"^every\s+(\d+)\s*([smh])$")
 UNIT_SECONDS = {"s": 1, "m": 60, "h": 3600}
 ENTITY_LABELS = {"user": "users", "device": "devices", "alert": "alerts"}
+RECENT_RUN_S = 600
+AUTH_LABELS = {
+    "none": "No login",
+    "api_key": "API key",
+    "basic": "Basic",
+    "bearer": "Bearer",
+    "oauth2_client_credentials": "OAuth2",
+}
+PAGING_LABELS = {
+    "none": "one file",
+    "link_header": "link header",
+    "page_number": "page number",
+    "offset": "offset",
+    "body_token": "page token",
+    "body_next_url": "next URL",
+}
 
 
 def parse_schedule(text: Any) -> int | None:
@@ -78,6 +94,8 @@ def connector_row(connector: dict[str, Any], now: datetime | None = None) -> dic
     if connector["enabled"] and interval:
         next_run = (last_time + timedelta(seconds=interval)) if last_time else now
 
+    auth = (config.get("auth") or {}).get("type", "none")
+    paging = (config.get("pagination") or {}).get("type", "none")
     last_ago = time_ago(last_time, now)
     summary = f"{connector['name']}: {connector['status']}, {last_ago}, {stored:,} {label}"
     return {
@@ -88,6 +106,7 @@ def connector_row(connector: dict[str, Any], now: datetime | None = None) -> dic
         "status": connector["status"],
         "consecutive_failures": connector["consecutive_failures"],
         "running": bool(run and run["status"] == "running"),
+        "recent": bool(last_time and (now - last_time).total_seconds() < RECENT_RUN_S),
         "last_run": last_ago,
         "last_run_at": last_time.strftime("%Y-%m-%dT%H:%M:%SZ") if last_time else None,
         "records_pulled": run["records_pulled"] if run else 0,
@@ -96,6 +115,7 @@ def connector_row(connector: dict[str, Any], now: datetime | None = None) -> dic
         "last_error": run["last_error"] if run else None,
         "next_run": time_until(next_run, now),
         "summary": summary,
+        "detail": f"{AUTH_LABELS.get(auth, auth)} · {PAGING_LABELS.get(paging, paging)}",
     }
 
 

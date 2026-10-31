@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Quarantine{% endblock %}
+{% block content %}
+<div class="head">
+  <div class="head-title"><h1>Quarantine</h1><span class="muted">{{ items|length }} record{{ "" if items|length == 1 else "s" }} shown, {{ waiting }} waiting</span></div>
+</div>
+<section class="card" aria-label="Quarantined records">
+  <span class="label">[ Set aside, with the reason ]</span>
+  <form class="filter" method="get">
+    <div class="field"><label for="q-connector">Connector</label>
+      <select id="q-connector" name="connector"><option value="">All connectors</option>
+        {% for name in connector_names %}<option value="{{ name }}"{% if name == connector %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></div>
+    <button>Filter</button>
+  </form>
+  {% if items %}
+  <div class="wrap"><table>
+    <thead><tr><th>Id</th><th>Connector</th><th>Reason</th><th>Record</th><th>When</th><th>Replay</th></tr></thead>
+    <tbody>
+    {% for item in items %}
+    <tr>
+      <td class="num">{{ item.id }}</td>
+      <td class="name"><a href="/ui/connector/{{ item.connector|urlencode }}">{{ item.connector }}</a></td>
+      <td class="err">{{ item.reason }}</td>
+      <td class="raw"><pre>{{ item.raw_json }}</pre></td>
+      <td class="when">{{ item.created_at|replace("T", " ")|replace("Z", "") }}</td>
+      <td>{% if item.replayed %}<span class="st t-teal"><i class="dot" aria-hidden="true"></i>Replayed</span>{% else %}<form class="inline" method="post" action="/ui/quarantine/{{ item.id }}/replay"><button aria-label="Replay record {{ item.id }}">Replay</button></form>{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% else %}<p class="note">Nothing quarantined.</p>{% endif %}
+</section>
+{% endblock %}

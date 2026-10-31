@@ -1,6 +1,8 @@
 {% if table_rows %}
 <div class="wrap"><table>
-  <tr>{% for c in table_columns %}<th>{{ c }}</th>{% endfor %}</tr>
-  {% for row in table_rows %}<tr>{% for c in table_columns %}<td>{{ row[c] if row[c] is not none else "" }}</td>{% endfor %}</tr>{% endfor %}
+  <thead><tr>{% for c in table_columns %}<th>{{ c }}</th>{% endfor %}</tr></thead>
+  <tbody>
+  {% for row in table_rows %}<tr>{% for c in table_columns %}<td{% if c in ("source", "id", "cve", "timestamp", "fetched_at", "last_login", "last_seen", "ip") %} class="cell-mono"{% endif %}>{{ row[c] if row[c] is not none else "" }}</td>{% endfor %}</tr>{% endfor %}
+  </tbody>
 </table></div>
-{% else %}<p class="muted">None.</p>{% endif %}
+{% else %}<p class="note">None.</p>{% endif %}

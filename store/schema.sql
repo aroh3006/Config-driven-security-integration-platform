@@ -68,7 +68,8 @@ CREATE TABLE IF NOT EXISTS runs (
     records_bad    INTEGER NOT NULL DEFAULT 0,
     pages          INTEGER NOT NULL DEFAULT 0,
     retries        INTEGER NOT NULL DEFAULT 0,
-    last_error     TEXT
+    last_error     TEXT,
+    request_log    TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_runs_connector ON runs (connector, id);
 

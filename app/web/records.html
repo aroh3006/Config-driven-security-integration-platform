@@ -1,16 +1,17 @@
 {% extends "base.html" %}
 {% block title %}{{ entity|capitalize }}{% endblock %}
 {% block content %}
-<h1>{{ entity|capitalize }}</h1>
-<form method="get" class="row">
-  <label>Source <select name="source"><option value="">All sources</option>
-    {% for s in sources %}<option {% if s == source %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
-  <label>Search <input name="q" value="{{ q }}"></label>
-  <button>Filter</button>
-</form>
-<p class="muted">Showing {{ rows|length }} rows (up to 200).</p>
-<div class="wrap"><table>
-  <tr>{% for c in columns %}<th>{{ c }}</th>{% endfor %}</tr>
-  {% for row in rows %}<tr>{% for c in columns %}<td>{{ row[c] if row[c] is not none else "" }}</td>{% endfor %}</tr>{% endfor %}
-</table></div>
+<div class="head"><div class="head-title"><h1>{{ entity|capitalize }}</h1><span class="muted">One table, every source</span></div></div>
+{% set tab = entity %}{% include "_data_nav.html" %}
+<section class="card" aria-label="{{ entity|capitalize }} table">
+  <form class="filter" method="get">
+    <div class="field"><label for="r-source">Source</label>
+      <select id="r-source" name="source"><option value="">All sources</option>
+        {% for s in sources %}<option value="{{ s }}"{% if s == source %} selected{% endif %}>{{ s }}</option>{% endfor %}</select></div>
+    <div class="field"><label for="r-q">Search</label><input id="r-q" name="q" type="search" value="{{ q }}"></div>
+    <button>Filter</button>
+  </form>
+  <span class="label">[ Showing {{ rows|length }} rows, up to 200 ]</span>
+  {% set table_rows = rows %}{% set table_columns = columns %}{% include "_rows.html" %}
+</section>
 {% endblock %}

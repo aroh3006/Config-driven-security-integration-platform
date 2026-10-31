@@ -1,11 +1,15 @@
 {% extends "base.html" %}
 {% block title %}KEV match{% endblock %}
 {% block content %}
-<h1>Alerts on actively exploited CVEs</h1>
-{% if not kev_count %}
-<p>The <code>{{ kev_source }}</code> connector has no rows yet. Add it and run it to see matches.</p>
-{% else %}
-<p>{{ rows|length }} alerts have a CVE listed among the {{ "{:,}".format(kev_count) }} entries in <code>{{ kev_source }}</code>.</p>
-{% with table_rows=rows, table_columns=columns %}{% include "_rows.html" %}{% endwith %}
-{% endif %}
+<div class="head"><div class="head-title"><h1>Alerts on actively exploited CVEs</h1></div></div>
+{% set tab = "kev" %}{% include "_data_nav.html" %}
+<section class="card" aria-label="KEV match">
+  {% if not kev_count %}
+  <p class="note">The <code>{{ kev_source }}</code> connector has no rows yet. Add it and run it to see matches.</p>
+  {% else %}
+  <span class="label">[ {{ rows|length }} matches · {{ "{:,}".format(kev_count) }} entries in {{ kev_source }} ]</span>
+  <p class="note">{{ rows|length }} alerts have a CVE listed among the {{ "{:,}".format(kev_count) }} entries in <code>{{ kev_source }}</code>.</p>
+  {% set table_rows = rows %}{% set table_columns = columns %}{% include "_rows.html" %}
+  {% endif %}
+</section>
 {% endblock %}

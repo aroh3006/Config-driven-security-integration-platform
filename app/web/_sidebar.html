@@ -1,0 +1,44 @@
+{% from "_icons.html" import icon %}
+<aside class="side" aria-label="Sources">
+  <div class="side-head">
+    <h2>Sources</h2>
+    <a class="icon-btn" href="/ui/add" aria-label="Add a source" title="Add a source">{{ icon("plus") }}</a>
+  </div>
+  <form class="side-search" method="get" role="search" action="{{ request.url.path }}">
+    <label class="sr-only" for="side-find">Search sources</label>
+    <input id="side-find" type="search" name="find" value="{{ side.find }}" placeholder="Search sources">
+  </form>
+  <div class="tabs">
+    <input type="radio" name="side-tab" id="tab-sources" checked>
+    <label for="tab-sources">Sources</label>
+    <input type="radio" name="side-tab" id="tab-tables">
+    <label for="tab-tables">Tables</label>
+  </div>
+  <div class="side-panel panel-sources">
+    <div class="tree">
+      {% for folder in side.folders %}
+      <details open>
+        <summary{% if folder.mock %} class="folder-mock"{% endif %}>{{ icon("folder") }}<span>{{ folder.label }}</span><span class="count">{{ folder.rows|length }}</span></summary>
+        {% for row in folder.rows %}
+        <a class="tree-row" href="/ui/connector/{{ row.name|urlencode }}"{% if current == row.name %} aria-current="page"{% endif %}>
+          <i class="dot t-{{ tone(row.status) }}" aria-hidden="true"></i>
+          <span class="tree-name"><b>{{ row.name }}</b><small>{{ row.status }}</small></span>
+          <span class="count">{{ "{:,}".format(row.stored) }}</span>
+        </a>
+        {% endfor %}
+      </details>
+      {% else %}
+      <p class="side-empty">{% if side.find %}No source matches that search.{% else %}No sources yet.{% endif %}</p>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="side-panel panel-tables">
+    <div class="tree">
+      {% for label, total in side.totals.items() %}
+      <a class="tree-row" href="/ui/records/{{ label }}"><span class="tree-name"><b>{{ label }}</b></span><span class="count">{{ "{:,}".format(total) }}</span></a>
+      {% endfor %}
+      <a class="tree-row" href="/ui/people"><span class="tree-name"><b>people</b></span></a>
+      <a class="tree-row" href="/ui/kev"><span class="tree-name"><b>KEV match</b></span></a>
+    </div>
+  </div>
+</aside>

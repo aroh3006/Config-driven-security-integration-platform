@@ -1,17 +1,25 @@
-<h2>Test result: <span class="badge {{ test.status }}">{{ test.status }}</span></h2>
-{% if test.last_error %}<div class="bad">{{ test.last_error }}</div>{% endif %}
-<p>Records: {{ test.records_pulled }}. Bad: {{ test.records_bad }}. Pages: {{ test.pages }}. Retries: {{ test.retries }}.</p>
-{% if test.requests %}
-<div class="wrap"><table>
-  <tr><th>Method</th><th>URL (masked)</th><th>Status</th><th>ms</th><th>Attempt</th></tr>
-  {% for r in test.requests %}<tr><td>{{ r.method }}</td><td>{{ r.url_masked }}</td><td>{{ r.status }}</td><td>{{ r.ms }}</td><td>{{ r.attempt }}</td></tr>{% endfor %}
-</table></div>
-{% endif %}
-{% if test.pairs %}
-<h2>Raw and mapped, side by side</h2>
-<div class="wrap"><table>
-  <tr><th style="width:50%">Raw</th><th>Mapped</th></tr>
-  {% for pair in test.pairs %}<tr><td><pre>{{ pair.raw }}</pre></td><td><pre>{{ pair.mapped }}</pre></td></tr>{% endfor %}
-</table></div>
-{% endif %}
-{% if test.unmapped_fields %}<p><strong>Unmapped fields:</strong> {{ test.unmapped_fields|join(", ") }}</p>{% endif %}
+{% from "_icons.html" import status %}
+<section class="card" aria-label="Test result">
+  <div class="label-row"><span class="label">[ Test result ]</span>{{ status(test.status) }}</div>
+  <h2>Test result: {{ test.status }}</h2>
+  {% if test.last_error %}<div class="bad">{{ test.last_error }}</div>{% endif %}
+  <p class="note">Records: {{ test.records_pulled }}. Bad: {{ test.records_bad }}. Pages: {{ test.pages }}. Retries: {{ test.retries }}. Nothing was stored.</p>
+  {% if test.requests %}
+  <div class="wrap"><table>
+    <thead><tr><th>Method</th><th>URL (masked)</th><th>Status</th><th class="num">ms</th><th class="num">Attempt</th></tr></thead>
+    <tbody>
+    {% for r in test.requests %}<tr><td>{{ r.method }}</td><td>{{ r.url_masked }}</td><td>{{ r.status }}</td><td class="num">{{ r.ms }}</td><td class="num">{{ r.attempt }}</td></tr>{% endfor %}
+    </tbody>
+  </table></div>
+  {% endif %}
+  {% if test.pairs %}
+  <span class="label">[ Raw and mapped, side by side ]</span>
+  <div class="wrap"><table>
+    <thead><tr><th style="width: 50%">Raw</th><th>Mapped</th></tr></thead>
+    <tbody>
+    {% for pair in test.pairs %}<tr><td><pre>{{ pair.raw }}</pre></td><td><pre>{{ pair.mapped }}</pre></td></tr>{% endfor %}
+    </tbody>
+  </table></div>
+  {% endif %}
+  {% if test.unmapped_fields %}<p class="note"><strong>Unmapped fields:</strong> {{ test.unmapped_fields|join(", ") }}</p>{% endif %}
+</section>

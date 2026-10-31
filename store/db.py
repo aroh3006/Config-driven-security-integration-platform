@@ -42,9 +42,15 @@ CONNECTOR_STATUSES = frozenset(
 
 _UNSET: Any = object()
 
+MAX_LOGGED_REQUESTS = 200
+RUN_COLUMNS = (
+    "id, connector, started_at, finished_at, status, records_pulled, records_bad, pages, retries, last_error"
+)
+
 _MASK = "***"
 _SECRET_ENV_SUFFIXES = ("_KEY", "_TOKEN", "_SECRET", "_PASSWORD", "_WEBHOOK")
 _MIN_SECRET_LENGTH = 6
+_SECRET_KEY_RE = re.compile(r"token|secret|password|passwd|api[_-]?key|authorization", re.IGNORECASE)
 _AUTH_HEADER_RE = re.compile(
     r"""(authorization["']?\s*[:=]\s*)["']?(?:[A-Za-z]+\s+)?[^\s"',}]+""",
     re.IGNORECASE,
@@ -130,8 +136,16 @@ def init_db() -> None:
     try:
         conn.execute("PRAGMA journal_mode=WAL")
         conn.executescript(SCHEMA_PATH.read_text(encoding="utf-8"))
+        _add_missing_columns(conn)
     finally:
         conn.close()
+
+
+def _add_missing_columns(conn: sqlite3.Connection) -> None:
+    """Bring a database made by an older version up to the current schema."""
+    existing = {row["name"] for row in conn.execute("PRAGMA table_info(runs)")}
+    if "request_log" not in existing:
+        conn.execute("ALTER TABLE runs ADD COLUMN request_log TEXT")
 
 
 # Records
@@ -325,12 +339,49 @@ def finish_run(
 
 
 def list_runs(connector: str, limit: int = 50) -> list[dict[str, Any]]:
-    """Return runs for one connector, newest first."""
+    """Return runs for one connector, newest first. The request log is left out."""
     with _read() as conn:
         rows = conn.execute(
-            "SELECT * FROM runs WHERE connector = ? ORDER BY id DESC LIMIT ?", (connector, limit)
+            f"SELECT {RUN_COLUMNS} FROM runs WHERE connector = ? ORDER BY id DESC LIMIT ?",
+            (connector, limit),
         )
         return [dict(row) for row in rows]
+
+
+def _mask_strings(value: Any) -> Any:
+    if isinstance(value, str):
+        return mask_text(value)
+    if isinstance(value, list):
+        return [_mask_strings(item) for item in value]
+    if isinstance(value, dict):
+        return {
+            key: _MASK if _SECRET_KEY_RE.search(str(key)) else _mask_strings(item)
+            for key, item in value.items()
+        }
+    return value
+
+
+def save_run_log(run_id: int, requests: list[dict[str, Any]], waits: list[float]) -> None:
+    """Keep a run's request log, latest entries first if it is over the cap.
+
+    Text is masked one string at a time. That keeps the stored JSON valid.
+    """
+    kept = requests[-MAX_LOGGED_REQUESTS:]
+    payload = {"requests": kept, "waits": waits, "dropped": len(requests) - len(kept)}
+    with _write() as conn:
+        conn.execute(
+            "UPDATE runs SET request_log = ? WHERE id = ?",
+            (json.dumps(_mask_strings(payload), default=str), run_id),
+        )
+
+
+def get_run_log(run_id: int) -> dict[str, Any]:
+    """Return {requests, waits, dropped}. Empty lists when nothing was saved."""
+    with _read() as conn:
+        row = conn.execute("SELECT request_log FROM runs WHERE id = ?", (run_id,)).fetchone()
+    if row is None or not row["request_log"]:
+        return {"requests": [], "waits": [], "dropped": 0}
+    return json.loads(row["request_log"])
 
 
 def last_run(connector: str) -> dict[str, Any] | None:
@@ -430,7 +481,7 @@ def mark_replayed(quarantine_id: int) -> None:
 # Connectors
 
 def _connector_dict(row: sqlite3.Row) -> dict[str, Any]:
-    """The scheduler tests `enabled is False`, so it must be a real boolean."""
+    """Return a connector row. The scheduler tests `enabled is False`, which needs a real boolean."""
     connector = dict(row)
     connector["enabled"] = bool(connector["enabled"])
     return connector
