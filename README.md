@@ -53,12 +53,19 @@ The same flow works with a file. Drop it in `configs/` and run `python -m app.cl
 | `nvd-cves` | alert | API key header | Offset |
 | `cisa-kev` | alert | None | None |
 | `devices-file` | device | None (CSV file) | None |
+| `mock-okta-users` | user | API key header | Link header |
+| `mock-okta-signins` | alert | API key header | Link header, incremental |
+| `mock-github-members` | user | Bearer | Page number |
+| `mock-github-dependabot` | alert | Bearer | Link header |
+| `mock-jira-tickets` | alert | Basic | Token in body |
 | `mock-firewall` | alert | API key header | Offset |
 | `mock-edr-hosts` | device | OAuth2 client credentials | Cursor |
 | `mock-edr-detections` | alert | OAuth2 client credentials | Cursor |
 | `mock-cloud-audit` | alert | API key header | Token in POST body |
 
-Before the real sources can load, replace the `YOUR-...` placeholders in their configs: `YOUR-ORG`, `YOUR-SITE`, `YOUR-PROJECT`, `YOUR-GITHUB-ORG` and `YOUR-DEMO-REPO`. Files that still have placeholders are skipped at startup.
+Sources named `mock-*` run against the local mock server and carry a `mock` tag on the health page. `mock_server/README.md` explains how they follow the vendors' published API specs and where they differ.
+
+`cisa-kev` runs live with no account. `nvd-cves` needs an `NVD_KEY`. Before the other real sources can load, replace the `YOUR-...` placeholders in their configs: `YOUR-ORG`, `YOUR-SITE`, `YOUR-PROJECT`, `YOUR-GITHUB-ORG` and `YOUR-DEMO-REPO`. Files that still have placeholders are skipped at startup. Moving from a mock to the real service changes only the base URL, the host allowlist and the secret names.
 
 ## CLI
 
@@ -100,7 +107,7 @@ python -m engine profile tests/samples/cisa_kev.json --name cisa-kev
 
 ## Security notes
 
-- Hosts are allowlisted per connector. Internal and cloud metadata addresses are blocked, and only `mock: true` connectors may call loopback.
+- Hosts are allowlisted per connector. Internal and cloud metadata addresses are blocked. Only `mock: true` connectors may call loopback.
 - Configs hold secret names only. Values come from environment variables loaded from a gitignored `.env`.
 - The store masks secrets in audit details, run errors and quarantine reasons.
 - A config edited on disk moves to `config_changed` and needs approval before it runs.

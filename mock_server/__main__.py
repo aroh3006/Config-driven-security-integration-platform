@@ -7,12 +7,17 @@ from pathlib import Path
 import uvicorn
 
 from mock_server import app as mock_app
+from mock_server import saas
 
 ENV_BLOCK = f"""\
 MOCK_FIREWALL_KEY={mock_app.FIREWALL_KEY}
 MOCK_EDR_CLIENT_ID={mock_app.EDR_CLIENT_ID}
 MOCK_EDR_CLIENT_SECRET={mock_app.EDR_CLIENT_SECRET}
 MOCK_CLOUD_KEY={mock_app.CLOUD_KEY}
+MOCK_OKTA_KEY={saas.OKTA_KEY}
+MOCK_GITHUB_TOKEN={saas.GITHUB_TOKEN}
+MOCK_JIRA_EMAIL={saas.JIRA_EMAIL}
+MOCK_JIRA_TOKEN={saas.JIRA_TOKEN}
 """
 
 CREDENTIALS = f"""\
@@ -31,6 +36,8 @@ Extra values for failure tests:
 | --- | --- |
 | Firewall key `{mock_app.FIREWALL_KEY_NO_ACCESS}` | 403 insufficient_scope |
 | EDR client `{mock_app.EDR_HOSTS_ONLY_CLIENT_ID}` with secret `{mock_app.EDR_HOSTS_ONLY_CLIENT_SECRET}` | Hosts work. Detections give 403. |
+| Okta key `{saas.OKTA_KEY_NO_ACCESS}` | 403 E0000006 |
+| GitHub token `{saas.GITHUB_TOKEN_NO_ALERTS}` | Members work. Dependabot alerts give 403. |
 """
 
 

@@ -1,4 +1,4 @@
-"""Mock security tools on one HTTP server: firewall, EDR and cloud audit.
+"""Mock security tools on one HTTP server: firewall, EDR, cloud audit, Okta, GitHub and Jira.
 
 Each one really enforces auth, paging and rate limits. The engine meets them
 exactly as it meets a real API. Only base_url differs.
@@ -16,11 +16,16 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from mock_server import data
+from mock_server import data, saas
+from mock_server.common import RateLimiter, same_secret
+from mock_server.common import bad_copy as _bad_copy
+from mock_server.common import decode_cursor as _decode_cursor
+from mock_server.common import encode_cursor as _encode_cursor
 
 FIREWALL_KEY = "mock-fw-key-7f3a91c2"
 FIREWALL_KEY_NO_ACCESS = "mock-fw-key-no-log-access"
@@ -48,51 +53,8 @@ class FaultRequest(BaseModel):
     mode: str
 
 
-class RateLimiter:
-    """Fixed window request counter per caller."""
-
-    def __init__(self, limit: int, window_s: int) -> None:
-        self.limit = limit
-        self.window_s = window_s
-        self._windows: dict[str, tuple[float, int]] = {}
-
-    def hit(self, caller: str) -> tuple[bool, dict[str, str], int]:
-        """Count a request. Returns (allowed, headers, seconds until reset)."""
-        now = time.time()
-        start, used = self._windows.get(caller, (now, 0))
-        if now - start >= self.window_s:
-            start, used = now, 0
-        used += 1
-        self._windows[caller] = (start, used)
-        reset_at = start + self.window_s
-        headers = {
-            "X-Rate-Limit-Limit": str(self.limit),
-            "X-Rate-Limit-Remaining": str(max(self.limit - used, 0)),
-            "X-Rate-Limit-Reset": str(int(reset_at)),
-        }
-        return used <= self.limit, headers, max(int(reset_at - now) + 1, 1)
-
-
 def _oauth_error(status: int, error: str, description: str, headers: dict[str, str] | None = None) -> JSONResponse:
     return JSONResponse({"error": error, "error_description": description}, status, headers)
-
-
-def _encode_cursor(offset: int) -> str:
-    return base64.urlsafe_b64encode(f"offset:{offset}".encode()).decode()
-
-
-def _decode_cursor(cursor: str) -> int | None:
-    try:
-        prefix, value = base64.urlsafe_b64decode(cursor.encode()).decode().split(":")
-        return int(value) if prefix == "offset" else None
-    except ValueError:
-        return None
-
-
-def _bad_copy(record: dict[str, Any], id_field: str) -> dict[str, Any]:
-    copy = dict(record)
-    copy.pop(id_field, None)
-    return copy
 
 
 def create_app(now: datetime | None = None, token_ttl_s: int = 300) -> FastAPI:
@@ -115,8 +77,11 @@ def create_app(now: datetime | None = None, token_ttl_s: int = 300) -> FastAPI:
 
     app = FastAPI(
         title="Mock security tools",
-        description="Firewall, EDR and cloud audit mocks. All data is fake.",
+        description="Firewall, EDR, cloud audit, Okta, GitHub and Jira mocks. All data is fake.",
     )
+
+    # Real APIs compress large responses. Clients must handle gzip here too.
+    app.add_middleware(GZipMiddleware, minimum_size=500)
 
     def bad_record_active(path: str) -> bool:
         return any(
@@ -194,9 +159,9 @@ def create_app(now: datetime | None = None, token_ttl_s: int = 300) -> FastAPI:
         key = request.headers.get("x-api-key")
         if key is None:
             return _oauth_error(401, "invalid_token", "Missing X-API-Key header.")
-        if key == FIREWALL_KEY_NO_ACCESS:
+        if same_secret(key, FIREWALL_KEY_NO_ACCESS):
             return _oauth_error(403, "insufficient_scope", "This key cannot read logs.")
-        if key != FIREWALL_KEY:
+        if not same_secret(key, FIREWALL_KEY):
             return _oauth_error(401, "invalid_token", "The API key is not valid.")
         allowed, headers, wait = firewall_limit.hit(key)
         if not allowed:
@@ -230,21 +195,23 @@ def create_app(now: datetime | None = None, token_ttl_s: int = 300) -> FastAPI:
         if form.get("grant_type") != "client_credentials":
             return _oauth_error(400, "unsupported_grant_type", "Use client_credentials.")
         client = clients.get(str(client_id))
-        if client is None or client[0] != client_secret:
+        if client is None or not same_secret(str(client_secret), client[0]):
             return _oauth_error(401, "invalid_client", "Client authentication failed.")
         token = secrets.token_urlsafe(32)
         tokens[token] = (time.time() + token_ttl_s, client[1])
         return JSONResponse(
-            {"access_token": token, "token_type": "bearer", "expires_in": token_ttl_s}, 201
+            {"access_token": token, "token_type": "bearer", "expires_in": token_ttl_s},
+            201,
+            {"Cache-Control": "no-store", "Pragma": "no-cache"},
         )
 
     def edr_page(
         request: Request, records: list[dict[str, Any]], scope: str, id_field: str, limit: int, after: str | None
     ) -> JSONResponse:
         authorization = request.headers.get("authorization", "")
-        challenge = {"WWW-Authenticate": "Bearer"}
+        challenge = {"WWW-Authenticate": 'Bearer error="invalid_token"'}
         if not authorization.lower().startswith("bearer "):
-            return _oauth_error(401, "invalid_token", "Missing bearer token.", challenge)
+            return _oauth_error(401, "invalid_token", "Missing bearer token.", {"WWW-Authenticate": "Bearer"})
         token = authorization[7:]
         entry = tokens.get(token)
         if entry is None:
@@ -254,7 +221,12 @@ def create_app(now: datetime | None = None, token_ttl_s: int = 300) -> FastAPI:
             del tokens[token]
             return _oauth_error(401, "invalid_token", "The token has expired.", challenge)
         if scope not in scopes:
-            return _oauth_error(403, "insufficient_scope", f"Token lacks {scope}.")
+            return _oauth_error(
+                403,
+                "insufficient_scope",
+                f"Token lacks {scope}.",
+                {"WWW-Authenticate": f'Bearer error="insufficient_scope", scope="{scope}"'},
+            )
         allowed, headers, wait = edr_limit.hit(token)
         if not allowed:
             return _oauth_error(
@@ -302,7 +274,7 @@ def create_app(now: datetime | None = None, token_ttl_s: int = 300) -> FastAPI:
     @app.post("/cloud/", tags=["cloud"])
     async def cloud_lookup(request: Request) -> JSONResponse:
         key = request.headers.get("x-api-key")
-        if key != CLOUD_KEY:
+        if not same_secret(key, CLOUD_KEY):
             return aws_error(401, "UnrecognizedClientException", "The security token is not valid.")
         if request.headers.get("x-amz-target") != "CloudTrail_20131101.LookupEvents":
             return aws_error(400, "UnknownOperationException", "Unknown X-Amz-Target.")
@@ -332,4 +304,5 @@ def create_app(now: datetime | None = None, token_ttl_s: int = 300) -> FastAPI:
             result["NextToken"] = _encode_cursor(offset + limit)
         return JSONResponse(result, headers=headers)
 
+    app.include_router(saas.build_router(start, bad_record_active))
     return app

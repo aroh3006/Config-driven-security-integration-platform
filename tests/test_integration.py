@@ -11,6 +11,7 @@ from app import connectors, engine_client, health
 from app.api import create_app
 from engine import faults
 from mock_server import app as mock_app
+from mock_server import saas
 from store import db
 
 REPO_CONFIGS = Path(__file__).resolve().parent.parent / "configs"
@@ -19,19 +20,24 @@ MOCK_SECRETS = {
     "MOCK_EDR_CLIENT_ID": mock_app.EDR_CLIENT_ID,
     "MOCK_EDR_CLIENT_SECRET": mock_app.EDR_CLIENT_SECRET,
     "MOCK_CLOUD_KEY": mock_app.CLOUD_KEY,
+    "MOCK_OKTA_KEY": saas.OKTA_KEY,
+    "MOCK_GITHUB_TOKEN": saas.GITHUB_TOKEN,
+    "MOCK_JIRA_EMAIL": saas.JIRA_EMAIL,
+    "MOCK_JIRA_TOKEN": saas.JIRA_TOKEN,
 }
 
 
 @pytest.fixture
 def mock_transport():
-    server = TestClient(mock_app.create_app())
+    server = TestClient(mock_app.create_app(), base_url="http://localhost:9000")
 
     def handle(request: httpx.Request) -> httpx.Response:
         headers = {k: v for k, v in request.headers.items() if k.lower() != "host"}
         reply = server.request(
             request.method, str(request.url.raw_path, "ascii"), headers=headers, content=request.content
         )
-        return httpx.Response(reply.status_code, headers=reply.headers, content=reply.content)
+        passed_on = [(k, v) for k, v in reply.headers.multi_items() if k.lower() != "content-encoding"]
+        return httpx.Response(reply.status_code, headers=passed_on, content=reply.content)
 
     return httpx.MockTransport(handle)
 
@@ -82,6 +88,62 @@ def test_mock_sources_run_end_to_end(run, name, entity, total):
     assert stored == total - result.records_bad
     assert len(db.list_quarantine(name, limit=500)) == result.records_bad
     assert db.get_connector(name)["status"] == "degraded"
+
+
+@pytest.mark.parametrize(
+    "name, entity, total, pages",
+    [
+        ("mock-okta-users", "user", 120, 3),
+        ("mock-github-members", "user", 130, 4),
+        ("mock-jira-tickets", "alert", 150, 3),
+    ],
+)
+def test_core_three_differ_in_login_and_paging_and_all_load(run, name, entity, total, pages):
+    result = run(name)
+    assert result.status == "partial", result.last_error
+    assert (result.records_pulled, result.pages) == (total, pages)
+    assert result.records_bad == 1
+    assert db.count_records(entity, name) == total - 1
+
+
+def test_dependabot_loads_open_alerts_with_real_cves(run):
+    result = run("mock-github-dependabot")
+    assert result.ok, result.last_error
+    rows = db.query_records("alert", source="mock-github-dependabot", limit=100)
+    assert rows and all(row["cve"].startswith("CVE-") for row in rows)
+    assert {row["severity"] for row in rows} <= {"high", "critical"}
+
+
+def test_okta_signins_stop_on_empty_page_and_advance_the_watermark(run):
+    first = run("mock-okta-signins")
+    assert first.status == "partial", first.last_error
+    assert first.records_bad == 1
+    assert first.more_pages is False
+    mark = db.get_checkpoint("mock-okta-signins")
+    assert mark["watermark"] and mark["resume_state"] is None
+
+    second = run("mock-okta-signins")
+    assert second.status == "success", second.last_error
+    assert second.pages <= 2
+    assert second.records_pulled < first.records_pulled
+
+
+def test_people_view_joins_across_mock_sources(run, monkeypatch):
+    run("mock-okta-users")
+    run("mock-github-members")
+    run("mock-okta-signins")
+    run("mock-edr-hosts")
+    records = db.person_records("ann@example.com")
+    assert {row["source"] for row in records["users"]} == {"mock-okta-users", "mock-github-members"}
+    assert records["devices"]
+    assert records["alerts"]
+
+
+def test_jira_timestamps_with_no_colon_offset_parse(run):
+    run("mock-jira-tickets")
+    rows = db.query_records("alert", source="mock-jira-tickets", limit=200)
+    assert all(row["timestamp"].endswith("Z") for row in rows)
+    assert {row["severity"] for row in rows} <= {"critical", "high", "medium", "low"}
 
 
 def test_common_schema_values_are_clean(run):
@@ -178,6 +240,17 @@ def test_internal_address_config_runs_are_blocked(run, config_folder):
     )
     assert connectors.save_and_approve(text, "test") == []
     result = engine.run_connector("evil", store=db, resolver=lambda _: ["169.254.169.254"], sleeper=lambda _: None)
+    assert result.status == "failed"
+    assert "metadata" in result.last_error
+
+
+def test_metadata_address_as_literal_ip_is_blocked(config_folder):
+    text = (
+        "name: metadata\nentity: alert\nsource: { base_url: 'https://169.254.169.254', allow_hosts: ['169.254.169.254'] }\n"
+        "map: { id: id, timestamp: t }\n"
+    )
+    assert connectors.save_and_approve(text, "test") == []
+    result = engine.run_connector("metadata", store=db, sleeper=lambda _: None)
     assert result.status == "failed"
     assert "metadata" in result.last_error
 

@@ -1,0 +1,35 @@
+name: mock-github-members
+entity: user
+mock: true
+source:
+  type: http
+  base_url: http://localhost:9000/github
+  allow_hosts: [localhost]
+auth:
+  type: bearer
+  secret: mock_github_token
+request:
+  method: GET
+  path: /orgs/example-org/members
+  headers:
+    Accept: application/vnd.github+json
+    X-GitHub-Api-Version: "2026-03-10"
+  format: json
+  records_path: ""
+pagination:
+  type: page_number
+  page_param: page
+  size_param: per_page
+  size: 50
+  start: 1
+schedule: every 15m
+retry: { delays_s: [1, 2, 4], jitter: false }
+rate_limit: { max_rps: 2, remaining_header: X-RateLimit-Remaining, reset_header: X-RateLimit-Reset }
+limits: { max_pages: 50, timeout_s: 5, max_response_mb: 20 }
+map:
+  id: id
+  name: { coalesce: [name, login] }
+  email: email
+  status: { const: "active" }
+required: [id]
+notify: { slack_after_failures: 3 }

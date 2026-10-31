@@ -192,7 +192,7 @@ def serve(
     port: int = typer.Option(8000, help="Port to bind."),
 ) -> None:
     """Start the web app and scheduler."""
-    uvicorn.run("app.api:app", host=host, port=port)
+    uvicorn.run("app.api:app", host=host, port=port, access_log=False)
 
 
 if __name__ == "__main__":

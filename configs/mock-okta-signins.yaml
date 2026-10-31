@@ -1,0 +1,40 @@
+name: mock-okta-signins
+entity: alert
+mock: true
+source:
+  type: http
+  base_url: http://localhost:9000/okta
+  allow_hosts: [localhost]
+auth:
+  type: api_key
+  header: Authorization
+  prefix: "SSWS "
+  secret: mock_okta_key
+request:
+  method: GET
+  path: /api/v1/logs
+  params:
+    limit: 100
+    filter: 'eventType eq "user.session.start"'
+  format: json
+  records_path: ""
+pagination:
+  type: link_header
+schedule: every 15m
+retry: { delays_s: [1, 2, 4], jitter: false }
+rate_limit: { max_rps: 2, remaining_header: X-Rate-Limit-Remaining, reset_header: X-Rate-Limit-Reset }
+incremental:
+  field: published
+  param: since
+  template: "{checkpoint}"
+  start: "2026-10-01T00:00:00Z"
+limits: { max_pages: 50, timeout_s: 5, max_response_mb: 20 }
+map:
+  id: uuid
+  type: eventType
+  severity:
+    path: severity
+    lookup: { DEBUG: info, INFO: info, WARN: medium, ERROR: high }
+  timestamp: { path: published, transform: to_utc }
+  description: { join: [displayMessage, actor.alternateId], sep: " : " }
+notify: { slack_after_failures: 3 }
