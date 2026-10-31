@@ -2,7 +2,7 @@
 <div class="wrap"><table>
   <thead><tr>{% for c in table_columns %}<th>{{ c }}</th>{% endfor %}</tr></thead>
   <tbody>
-  {% for row in table_rows %}<tr>{% for c in table_columns %}<td{% if c in ("source", "id", "cve", "timestamp", "fetched_at", "last_login", "last_seen", "ip") %} class="cell-mono"{% endif %}>{{ row[c] if row[c] is not none else "" }}</td>{% endfor %}</tr>{% endfor %}
+  {% for row in table_rows %}<tr>{% for c in table_columns %}<td{% if c in ("source", "id", "cve", "timestamp", "fetched_at", "last_login", "last_seen", "ip") %} class="cell-mono"{% endif %}>{% if c == "severity" and row[c] %}<span class="st t-{{ severity_tone(row[c]) }}"><i class="dot" aria-hidden="true"></i>{{ row[c] }}</span>{% else %}{{ row[c] if row[c] is not none else "" }}{% endif %}</td>{% endfor %}</tr>{% endfor %}
   </tbody>
 </table></div>
 {% else %}<p class="note">None.</p>{% endif %}

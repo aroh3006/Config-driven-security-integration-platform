@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import quote
@@ -34,12 +35,15 @@ from store import db
 ACTOR = "web"
 KEV_SOURCE = "cisa-kev"
 FAULT_MODES = ("503x3", "503x4", "429:30", "timeoutx4", "401", "badrecord")
+RUN_BUSY_TRIES = 60
+RUN_BUSY_WAIT_S = 1.0
 AUTH_TYPES = ("none", "api_key", "basic", "bearer", "oauth2_client_credentials")
 PAGING_TYPES = ("none", "link_header", "page_number", "offset", "body_token", "body_next_url")
 ENTITY_PAGES = {"users": "user", "devices": "device", "alerts": "alert"}
 
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "web"))
 templates.env.globals["tone"] = theme.tone
+templates.env.globals["severity_tone"] = theme.severity_tone
 # Changes when the stylesheet changes. A browser then never shows an old copy.
 templates.env.globals["css_version"] = int((Path(__file__).parent / "static" / "otto.css").stat().st_mtime)
 
@@ -150,10 +154,21 @@ def build_router(
             healthy=sum(1 for row in rows if row["status"] == "healthy"),
         )
 
-    def tracked_run(name: str) -> None:
-        """Run a connector and always mark it finished. Unused faults are cleared."""
+    def tracked_run(name: str, mode: str | None = None) -> None:
+        """Run a connector and always mark it finished. Unused faults are cleared.
+
+        A scenario's fault is set only for its own run. If a scheduled run holds the
+        connector, the fault comes off again so that run cannot take it, then we retry.
+        """
         try:
-            run_and_alert(name)
+            for _ in range(RUN_BUSY_TRIES if mode else 1):
+                if mode:
+                    engine.set_fault(name, mode)
+                if run_and_alert(name)["status"] != "skipped":
+                    break
+                engine.clear_fault(name)
+                if mode:
+                    time.sleep(RUN_BUSY_WAIT_S)
         finally:
             engine.clear_fault(name)
             live.finish(name)
@@ -164,7 +179,8 @@ def build_router(
         rows = health.health_rows()
         if not rows:
             return _redirect("/ui/add", "Add a source first")
-        worst = patch.choose(rows, 1)[0]["name"]
+        api_rows = [row for row in rows if not scenarios.is_file_source(db.get_connector(row["name"]))]
+        worst = patch.choose(api_rows or rows, 1)[0]["name"]
         return RedirectResponse(f"/ui/live/{quote(worst)}", status_code=303)
 
     @router.get("/ui/live/{name}", response_class=HTMLResponse)
@@ -192,7 +208,8 @@ def build_router(
             connector=connector,
             row=row,
             view=view,
-            scenarios=scenarios.SCENARIOS,
+            scenarios=scenarios.for_connector(connector),
+            file_source=scenarios.is_file_source(connector),
             refresh=state["active"] or (row["running"] and row["recent"]),
             p=patch.build(shown, limit=4, focus=name, tag=view["status"]["tag"], show_slot=False),
             engine={
@@ -215,18 +232,18 @@ def build_router(
         if scenario is None:
             raise HTTPException(400, f"unknown scenario {key!r}")
         back = f"/ui/live/{quote(name)}"
+        if scenarios.for_connector(connector)[key]["blocked"]:
+            return _redirect(back, f"{name} reads a local file, so it makes no web requests to fail. Pick an API source.")
         if connector["status"] == "paused":
             return _redirect(back, f"{name} is paused. Resume it to run a scenario.")
         if connector["approved_hash"] != connector["config_hash"]:
             return _redirect(back, f"{name} has a changed config. Approve it to run a scenario.")
         if not live.begin(name, key):
             return _redirect(back, f"{name} is already running. Wait for it to finish.")
-        if scenario["mode"] == "off":
-            engine.clear_fault(name)
-        else:
-            engine.set_fault(name, scenario["mode"])
+        mode = None if scenario["mode"] == "off" else scenario["mode"]
+        engine.clear_fault(name)
         db.audit(ACTOR, "scenario.start", name, key)
-        _spawn(lambda: tracked_run(name))
+        _spawn(lambda: tracked_run(name, mode))
         return RedirectResponse(back, status_code=303)
 
     @router.get("/ui/configs", response_class=HTMLResponse)

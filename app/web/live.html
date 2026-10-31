@@ -21,10 +21,11 @@
   {% for key, item in scenarios.items() %}
   <form class="inline" method="post" action="/ui/live/{{ connector.name|urlencode }}/scenario">
     <input type="hidden" name="scenario" value="{{ key }}">
-    <button class="pill{% if view.pill == key %} on {{ item.tone }}{% endif %}"{% if view.pill == key %} aria-pressed="true"{% endif %}>{{ item.label }}</button>
+    <button class="pill{% if view.pill == key %} on {{ item.tone }}{% endif %}"{% if view.pill == key %} aria-pressed="true"{% endif %}{% if item.blocked %} disabled title="This source reads a local file, so it makes no web requests to fail."{% endif %}>{{ item.label }}</button>
   </form>
   {% endfor %}
 </div>
+{% if file_source %}<p class="note">This source reads a local file. It makes no web requests, so the network scenarios do not apply here.</p>{% endif %}
 
 <div class="split">
   <section class="card" aria-label="Live patch panel">

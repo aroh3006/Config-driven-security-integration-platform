@@ -46,8 +46,8 @@
         {% for run in runs %}
         <tr><td class="when">{{ run.started_at|replace("T", " ")|replace("Z", "") }}</td><td class="when">{{ (run.finished_at or "")|replace("T", " ")|replace("Z", "") }}</td>
           <td>{{ status(run.status) }}</td>
-          <td class="num">{{ "{:,}".format(run.records_pulled) }}</td><td class="num">{{ run.records_bad }}</td><td class="num">{{ run.pages }}</td><td class="num">{{ run.retries }}</td>
-          <td class="err">{{ run.last_error or "" }}</td></tr>
+          <td class="num">{{ "{:,}".format(run.records_pulled) }}</td><td class="num{% if run.records_bad %} t-amber{% endif %}">{{ run.records_bad }}</td><td class="num">{{ run.pages }}</td><td class="num">{{ run.retries }}</td>
+          <td class="err t-{{ tone(run.status) }}">{{ run.last_error or "" }}</td></tr>
         {% endfor %}
         </tbody>
       </table></div>

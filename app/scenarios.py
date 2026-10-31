@@ -17,9 +17,9 @@ from store import db
 # Each pill maps to one fixed fault mode. The browser never sends a mode.
 SCENARIOS = {
     "healthy": {"label": "Healthy", "mode": "off", "tone": "teal"},
-    "rate_limit": {"label": "Too many requests (429)", "mode": "429:30", "tone": "amber"},
-    "timeout": {"label": "Timeout", "mode": "timeoutx4", "tone": "red"},
-    "wrong_key": {"label": "Wrong key", "mode": "401", "tone": "red"},
+    "rate_limit": {"label": "Too many requests (429)", "mode": "429:30", "tone": "amber", "network": True},
+    "timeout": {"label": "Timeout", "mode": "timeoutx4", "tone": "red", "network": True},
+    "wrong_key": {"label": "Wrong key", "mode": "401", "tone": "red", "network": True},
     "bad_record": {"label": "Bad record", "mode": "badrecord", "tone": "amber"},
 }
 KIND_PILL = {
@@ -56,6 +56,18 @@ def _config(connector: dict[str, Any]) -> dict[str, Any]:
     except yaml.YAMLError:
         return {}
     return data if isinstance(data, dict) else {}
+
+
+def is_file_source(connector: dict[str, Any]) -> bool:
+    """A file source makes no web requests, so network faults have nothing to act on."""
+    source = _config(connector).get("source")
+    return isinstance(source, dict) and source.get("type") == "file"
+
+
+def for_connector(connector: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """The scenario pills for one connector, with the ones it cannot show marked."""
+    on_file = is_file_source(connector)
+    return {key: {**item, "blocked": on_file and item.get("network", False)} for key, item in SCENARIOS.items()}
 
 
 def _time(stamp: str | None) -> str:

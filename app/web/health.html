@@ -3,17 +3,7 @@
 {% block head %}<meta http-equiv="refresh" content="10">{% endblock %}
 {% block title %}Home{% endblock %}
 {% block content %}
-<section class="hero">
-  <div class="hero-copy">
-    <span class="label">[ Config-driven · security integration ]</span>
-    <h1>Any tool.<br>One config.</h1>
-    <p class="note">One engine pulls users, devices and alerts from every security tool. A new source is a config file, not new code.</p>
-  </div>
-  <a class="btn" href="/ui/add">Plug in a source</a>
-</section>
-
 <section class="patch-box" aria-label="Patch panel">
-  <div class="hero-word" aria-hidden="true">CONNECT</div>
   {% include "_patch.html" %}
 </section>
 
@@ -41,8 +31,8 @@
       <td>{{ status(row.status) }}{% if row.running %}<br>{{ status("running") }}{% endif %}</td>
       <td>{{ row.last_run }}</td>
       <td class="num">{{ "{:,}".format(row.records_pulled) }}</td>
-      <td class="num">{{ row.records_bad }}</td>
-      <td class="err">{{ row.last_error or "" }}</td>
+      <td class="num{% if row.records_bad %} t-amber{% endif %}">{{ row.records_bad }}</td>
+      <td class="err t-{{ tone(row.status) }}">{{ row.last_error or "" }}</td>
       <td>{{ row.next_run }}</td>
       <td><div class="cell-actions">
         <a class="btn" href="/ui/live/{{ row.name|urlencode }}" aria-label="Open {{ row.name }} live">Live</a>

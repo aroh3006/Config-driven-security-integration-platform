@@ -76,7 +76,7 @@ def test_static_files_cannot_escape_the_folder(client):
 
 def test_required_tokens_are_exact():
     expected = {
-        "--page": "#0A0C0F", "--panel": "#0F1217", "--card": "#14181E", "--raised": "#1A1F26",
+        "--page": "#000000", "--panel": "#08090B", "--card": "#0E1014", "--raised": "#15181D",
         "--teal-line": "#2DD4BF", "--teal-text": "#5EEAD4", "--teal-fill": "#0D2A27",
         "--amber-line": "#F59E0B", "--amber-text": "#FBBF24", "--amber-fill": "#2A1F0A",
         "--red-line": "#EF4444", "--red-text": "#FCA5A5", "--red-fill": "#2A1212",
@@ -88,8 +88,8 @@ def test_required_tokens_are_exact():
 
 def test_text_contrast_meets_the_minimum():
     pairs = [
-        ("#F2F4F7", "#0A0C0F"), ("#C3C8D0", "#0F1217"), ("#A3A9B3", "#14181E"), ("#8C939E", "#0F1217"),
-        ("#8C939E", "#14181E"), ("#A3A9B3", "#1A1F26"), ("#5EEAD4", "#0D2A27"), ("#FBBF24", "#2A1F0A"),
+        ("#F2F4F7", "#000000"), ("#C3C8D0", "#08090B"), ("#A3A9B3", "#0E1014"), ("#8C939E", "#08090B"),
+        ("#8C939E", "#0E1014"), ("#A3A9B3", "#15181D"), ("#5EEAD4", "#0D2A27"), ("#FBBF24", "#2A1F0A"),
         ("#FBBF24", "#1C1608"), ("#FCA5A5", "#2A1212"), ("#FCA5A5", "#1F0F0F"), ("#0A0C0F", "#F2F4F7"),
         ("#F2F4F7", "#1C1608"), ("#F2F4F7", "#1F0F0F"), ("#A3A9B3", "#1C1608"), ("#A3A9B3", "#1F0F0F"),
     ]
@@ -215,7 +215,8 @@ def test_output_totals_add_up():
 def test_home_page_draws_the_panel(client):
     add(client, "demo")
     page = client.get("/").text
-    assert "CONNECT" in page and "<svg" in page
+    assert "hero-word" not in page and "<svg" in page
+    assert "Any tool" not in page and "One engine pulls" not in page
     assert "Plug in a new source" in page
     assert 'http-equiv="refresh" content="10"' in page
 
@@ -280,7 +281,7 @@ def test_take_apart_survives_a_broken_config(text):
 def test_take_apart_page(client):
     add(client, "demo")
     page = client.get("/ui/connector/demo/config").text
-    assert "demo.yaml" in page and "CONFIG" in page
+    assert "demo.yaml" in page and "apart-word" not in page
     assert "Change a block, not code" in page
     assert "demo_token" in page
     assert client.get("/ui/connector/nope/config").status_code == 404
@@ -369,3 +370,72 @@ def test_new_pages_load(client):
     db.add_quarantine("demo", None, {"x": "<b>raw</b>"}, "missing id")
     page = client.get("/ui/quarantine").text
     assert "missing id" in page and "<b>raw</b>" not in page
+
+
+# Colours must agree with what the row says
+
+STATUS_ERRORS = [
+    ("degraded", "partial", "3 of 300 records quarantined as invalid", 3, "t-amber"),
+    ("auth_failed", "auth_failed", "HTTP 401: credentials rejected", 0, "t-red"),
+    ("failing", "failed", "timeout after 4 attempts", 0, "t-red"),
+]
+
+
+@pytest.mark.parametrize("status, run_status, error, bad, css", STATUS_ERRORS)
+def test_home_error_text_takes_the_colour_of_its_status(client, status, run_status, error, bad, css):
+    add(client, "demo")
+    run_id = db.start_run("demo")
+    db.finish_run(run_id, run_status, 10, bad, 1, 0, error)
+    db.set_status("demo", status)
+    page = client.get("/").text
+    assert f'<td class="err {css}">{error}</td>' in page
+    assert f'<td class="num{" t-amber" if bad else ""}">{bad}</td>' in page
+
+
+def test_home_gives_a_healthy_row_no_error_colour(client):
+    add(client, "demo")
+    run_id = db.start_run("demo")
+    db.finish_run(run_id, "success", 10, 0, 1, 0, None)
+    db.set_status("demo", "healthy")
+    page = client.get("/").text
+    assert 'class="err t-teal"></td>' in page and 'class="num t-amber"' not in page
+
+
+@pytest.mark.parametrize(
+    "severity, expected",
+    [
+        ("critical", "red"), ("CRITICAL", "red"), ("error", "red"), ("high", "amber"), ("medium", "amber"),
+        ("warn", "amber"), ("low", "grey"), ("info", "grey"), ("unknown", "grey"), (None, "grey"), ("", "grey"),
+    ],
+)
+def test_severity_colours(severity, expected):
+    assert theme.severity_tone(severity) == expected
+
+
+def test_alert_table_colours_each_severity(client):
+    add(client, "demo", entity="alert")
+    rows = [
+        {"id": "a", "type": "t", "severity": "critical", "timestamp": "2026-10-31T00:00:00Z", "fetched_at": "2026-10-31T00:00:00Z", "raw": {}},
+        {"id": "b", "type": "t", "severity": "low", "timestamp": "2026-10-31T00:00:00Z", "fetched_at": "2026-10-31T00:00:00Z", "raw": {}},
+    ]
+    db.upsert("alert", "demo", rows)
+    page = client.get("/ui/records/alerts").text
+    assert '<span class="st t-red"><i class="dot" aria-hidden="true"></i>critical</span>' in page
+    assert '<span class="st t-grey"><i class="dot" aria-hidden="true"></i>low</span>' in page
+
+
+def test_every_status_uses_one_colour_on_every_surface(client):
+    add(client, "demo")
+    for status in ("healthy", "degraded", "failing", "auth_failed", "circuit_open", "paused", "never_run", "config_changed"):
+        db.set_status("demo", status)
+        page = client.get("/").text
+        expected = theme.tone(status)
+        assert f'<span class="st t-{expected}"><i class="dot" aria-hidden="true"></i>{status}</span>' in page
+        assert f'<i class="dot t-{expected}" aria-hidden="true"></i>' in page
+
+
+def test_no_giant_background_words_come_back():
+    templates = Path(__file__).resolve().parent.parent / "app" / "web"
+    assert "cqw" not in CSS and "-word {" not in CSS
+    for path in templates.glob("*.html"):
+        assert '-word"' not in path.read_text(encoding="utf-8"), path.name

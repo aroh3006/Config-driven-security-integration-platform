@@ -316,9 +316,57 @@ def test_pressing_healthy_clears_a_failure(client):
 
 
 def test_fault_never_outlives_its_run(client, monkeypatch):
+    monkeypatch.setattr(pages, "RUN_BUSY_WAIT_S", 0)
     monkeypatch.setattr(engine_client, "run_connector", lambda name: engine.RunResult(connector=name, status="skipped"))
     press(client, "mock-okta-users", "wrong_key")
     assert faults.list_faults() == {}
+
+
+def test_scenario_waits_for_a_run_already_going(client, monkeypatch):
+    real = engine_client.run_connector
+    faults_at_run, faults_at_wait = [], []
+
+    def busy_once(name):
+        faults_at_run.append("mock-okta-users" in faults.list_faults())
+        if len(faults_at_run) == 1:
+            return engine.RunResult(connector=name, status="skipped")
+        return real(name)
+
+    monkeypatch.setattr(engine_client, "run_connector", busy_once)
+    monkeypatch.setattr(pages.time, "sleep", lambda _: faults_at_wait.append(faults.list_faults()))
+    press(client, "mock-okta-users", "rate_limit")
+    assert faults_at_run == [True, True]
+    assert faults_at_wait == [{}]  # a scheduled run cannot take the fault while we wait
+    log = db.get_run_log(db.last_run("mock-okta-users")["id"])
+    assert 429 in [entry["status"] for entry in log["requests"]]
+    assert faults.list_faults() == {} and live.snapshot("mock-okta-users")["active"] is False
+
+
+def test_scenario_gives_up_after_the_busy_limit(client, monkeypatch):
+    calls = []
+    monkeypatch.setattr(pages, "RUN_BUSY_TRIES", 3)
+    monkeypatch.setattr(pages, "RUN_BUSY_WAIT_S", 0)
+
+    def always_busy(name):
+        calls.append(name)
+        return engine.RunResult(connector=name, status="skipped")
+
+    monkeypatch.setattr(engine_client, "run_connector", always_busy)
+    press(client, "mock-okta-users", "timeout")
+    assert len(calls) == 3 and faults.list_faults() == {}
+    assert live.snapshot("mock-okta-users")["active"] is False
+
+
+def test_plain_run_button_does_not_retry_a_busy_connector(client, monkeypatch):
+    calls = []
+
+    def always_busy(name):
+        calls.append(name)
+        return engine.RunResult(connector=name, status="skipped")
+
+    monkeypatch.setattr(engine_client, "run_connector", always_busy)
+    press(client, "mock-okta-users", "healthy")
+    assert len(calls) == 1
 
 
 def test_only_named_scenarios_are_accepted(client):
@@ -378,3 +426,42 @@ def test_page_escapes_log_and_record_values(client):
     db.save_run_log(run_id, [{"method": "GET", "url_masked": "https://x/<script>y</script>", "status": 200, "attempt": 1, "at": "2026-10-31T00:00:00Z"}], [])
     db.add_quarantine("mock-okta-users", run_id, {"id": "<script>z</script>"}, "missing required field 'email' <script>")
     assert "<script" not in client.get("/ui/live/mock-okta-users").text
+
+
+FILE_CONFIG = (REPO_CONFIGS / "devices-file.yaml").read_text(encoding="utf-8")
+
+
+@pytest.fixture
+def with_file_source(client):
+    assert connectors.save_and_approve(FILE_CONFIG, "test") == []
+    return client
+
+
+@pytest.mark.parametrize("key", ["rate_limit", "timeout", "wrong_key"])
+def test_network_scenarios_are_refused_on_a_file_source(with_file_source, key):
+    response = with_file_source.post("/ui/live/devices-file/scenario", data={"scenario": key}, follow_redirects=False)
+    assert response.status_code == 303 and "local%20file" in response.headers["location"]
+    assert faults._faults == {}
+    assert db.get_connector("devices-file")["status"] != "running"
+
+
+def test_file_source_can_still_run_the_scenarios_it_supports(with_file_source):
+    choices = scenarios.for_connector(db.get_connector("devices-file"))
+    assert {key for key, item in choices.items() if not item["blocked"]} == {"healthy", "bad_record"}
+
+
+def test_live_page_disables_network_pills_on_a_file_source(with_file_source):
+    page = with_file_source.get("/ui/live/devices-file").text
+    assert page.count('disabled title="This source reads a local file') == 3
+    assert "the network scenarios do not apply here" in page
+
+
+def test_live_page_keeps_every_pill_on_an_api_source(client):
+    page = client.get("/ui/live/mock-okta-users").text
+    assert "disabled title" not in page and "the network scenarios do not apply here" not in page
+
+
+def test_live_menu_opens_an_api_source_even_when_a_file_source_is_worst(with_file_source, monkeypatch):
+    monkeypatch.setattr(pages.patch, "choose", lambda rows, limit: rows[:limit])
+    target = with_file_source.get("/ui/live", follow_redirects=False).headers["location"]
+    assert "devices-file" not in target
