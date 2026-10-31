@@ -1,0 +1,40 @@
+name: mock-cortex-alerts
+entity: alert
+mock: true
+source:
+  type: http
+  base_url: http://localhost:9000/cortex
+  allow_hosts: [localhost]
+auth:
+  type: api_key
+  header: Authorization
+  secret: mock_cortex_key
+request:
+  method: POST
+  read_only_post: true
+  path: /public_api/v1/alerts/get_alerts
+  secret_headers:
+    x-xdr-auth-id: mock_cortex_key_id
+  format: json
+  records_path: reply.alerts
+  body:
+    request_data:
+      filters: []
+pagination:
+  type: offset
+  offset_param: request_data.search_from
+  end_param: request_data.search_to
+  limit: 100
+  param_in: body
+  total_path: reply.total_count
+schedule: every 15m
+retry: { delays_s: [1, 2, 4], jitter: false }
+rate_limit: { max_rps: 2, remaining_header: X-Rate-Limit-Remaining, reset_header: X-Rate-Limit-Reset }
+limits: { max_pages: 50, timeout_s: 5, max_response_mb: 20 }
+map:
+  id: alert_id
+  type: category
+  severity: { path: severity, transform: lower }
+  timestamp: { path: detection_timestamp, transform: to_utc }
+  description: name
+notify: { slack_after_failures: 3 }

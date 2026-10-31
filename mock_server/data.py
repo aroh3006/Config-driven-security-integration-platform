@@ -232,6 +232,16 @@ JIRA_SUMMARIES = (
     "Rotate exposed service credential",
 )
 EDR_HOST_STATUSES = ("normal", "contained", "containment_pending")
+FMC_DOMAIN = "e276abec-e0f2-11e3-8169-6d9ed49b625f"
+FMC_MODELS = ("Cisco Firepower 2130 Threat Defense", "Cisco Firepower 4115 Threat Defense", "Cisco Secure Firewall 3130 Threat Defense")
+FMC_VERSIONS = ("7.2.5", "7.4.1", "7.6.0")
+WIZ_RULES = (
+    ("Publicly exposed VM with a critical vulnerability", "CRITICAL"),
+    ("Storage bucket allows public read access", "HIGH"),
+    ("IAM user without MFA", "MEDIUM"),
+    ("Access key not rotated for 90 days", "LOW"),
+)
+WIZ_RESOURCES = (("AWS", "VIRTUAL_MACHINE"), ("Azure", "BUCKET"), ("GCP", "USER_ACCOUNT"))
 OS_VERSIONS = (
     ("Windows", "Windows 11 23H2"),
     ("Windows", "Windows Server 2022"),
@@ -895,3 +905,80 @@ def cloud_events(now: datetime, count: int = 300) -> list[dict[str, Any]]:
     events.sort(key=lambda item: item["EventTime"], reverse=True)
     _make_messy(events, "EventId", "EventTime", "EventName", first_kind=1)
     return events
+
+
+def fmc_devices(count: int = 60) -> list[dict[str, Any]]:
+    """Device records shaped like Cisco FMC devicerecords with expanded=true."""
+    rng = random.Random(f"{SEED}-fmc")
+    devices = []
+    for n in range(1, count + 1):
+        device_id = _uuid(rng)
+        devices.append(
+            {
+                "id": device_id,
+                "type": "Device",
+                "name": f"fw-{n:03d}",
+                "hostName": _internal_ip(rng),
+                "model": rng.choice(FMC_MODELS),
+                "sw_version": rng.choice(FMC_VERSIONS),
+                "healthStatus": rng.choices(("green", "yellow", "red"), weights=(85, 10, 5))[0],
+                "links": {"self": f"https://fmc.example.com/api/fmc_config/v1/domain/{FMC_DOMAIN}/devices/devicerecords/{device_id}"},
+            }
+        )
+    _make_messy(devices, "id", "sw_version", "name")
+    return devices
+
+
+def wiz_issues(now: datetime, count: int = 120) -> list[dict[str, Any]]:
+    """Issues as GraphQL nodes, newest first. Rule and resource names are illustrative."""
+    rng = random.Random(f"{SEED}-wiz")
+    issues = []
+    for created in sorted((_moment(rng, now) for _ in range(count)), reverse=True):
+        rule, severity = rng.choice(WIZ_RULES)
+        platform, kind = rng.choice(WIZ_RESOURCES)
+        updated = min(created + timedelta(hours=rng.randrange(1, 48)), now)
+        issues.append(
+            {
+                "id": _uuid(rng),
+                "severity": severity,
+                "status": rng.choices(("OPEN", "IN_PROGRESS", "RESOLVED"), weights=(70, 20, 10))[0],
+                "createdAt": iso(created),
+                "updatedAt": iso(updated),
+                "sourceRule": {"id": _uuid(rng), "name": rule},
+                "entitySnapshot": {
+                    "id": _uuid(rng),
+                    "name": f"{kind.lower()}-{rng.randrange(1000, 9999)}",
+                    "type": kind,
+                    "cloudPlatform": platform,
+                    "region": CLOUD_REGION,
+                },
+            }
+        )
+    _make_messy(issues, "id", "createdAt", "severity", first_kind=1)
+    return issues
+
+
+def cortex_alerts(now: datetime, count: int = 250) -> list[dict[str, Any]]:
+    """Alerts inside reply.alerts, newest first, raised on real mock hosts."""
+    rng = random.Random(f"{SEED}-cortex")
+    hosts = [h for h in edr_hosts(now) if "device_id" in h]
+    alerts = []
+    for n, moment in enumerate(sorted((_moment(rng, now) for _ in range(count)), reverse=True)):
+        technique = rng.choice(list(TECHNIQUES))
+        _, _, tactic, _, _, severity = TECHNIQUE_DETAILS[technique]
+        host = rng.choice(hosts)
+        alerts.append(
+            {
+                "alert_id": str(count - n),
+                "name": TECHNIQUES[technique],
+                "category": tactic,
+                "severity": EDR_SEVERITY_NAMES[severity].lower(),
+                "description": f"{TECHNIQUES[technique]} on {host['hostname']}",
+                "detection_timestamp": int(moment.timestamp() * 1000),
+                "host_name": host["hostname"],
+                "host_ip": host["local_ip"],
+                "user_name": host["last_login_user"],
+            }
+        )
+    _make_messy(alerts, "alert_id", "detection_timestamp", "name", first_kind=2)
+    return alerts

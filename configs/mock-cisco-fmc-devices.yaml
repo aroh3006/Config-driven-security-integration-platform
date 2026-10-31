@@ -1,0 +1,38 @@
+name: mock-cisco-fmc-devices
+entity: device
+mock: true
+source:
+  type: http
+  base_url: http://localhost:9000/fmc
+  allow_hosts: [localhost]
+auth:
+  type: session_login
+  login_url: http://localhost:9000/fmc/api/fmc_platform/v1/auth/generatetoken
+  username_secret: mock_fmc_user
+  password_secret: mock_fmc_password
+  token_header: X-auth-access-token
+  send_header: X-auth-access-token
+  ttl_s: 1500
+request:
+  method: GET
+  path: /api/fmc_config/v1/domain/e276abec-e0f2-11e3-8169-6d9ed49b625f/devices/devicerecords
+  params:
+    expanded: "true"
+  format: json
+  records_path: items
+pagination:
+  type: offset
+  offset_param: offset
+  limit_param: limit
+  limit: 25
+  total_path: paging.count
+schedule: every 15m
+retry: { delays_s: [1, 2, 4], jitter: false }
+rate_limit: { max_rps: 2, remaining_header: X-Rate-Limit-Remaining, reset_header: X-Rate-Limit-Reset }
+limits: { max_pages: 50, timeout_s: 5, max_response_mb: 20 }
+map:
+  id: id
+  hostname: name
+  ip: hostName
+  os: sw_version
+notify: { slack_after_failures: 3 }

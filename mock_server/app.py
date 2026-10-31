@@ -21,7 +21,7 @@ from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from mock_server import data, saas
+from mock_server import data, saas, styles
 from mock_server.common import RateLimiter, same_secret
 from mock_server.common import bad_copy as _bad_copy
 from mock_server.common import decode_cursor as _decode_cursor
@@ -305,4 +305,5 @@ def create_app(now: datetime | None = None, token_ttl_s: int = 300) -> FastAPI:
         return JSONResponse(result, headers=headers)
 
     app.include_router(saas.build_router(start, bad_record_active))
+    app.include_router(styles.build_router(start, bad_record_active, tokens))
     return app

@@ -1,0 +1,40 @@
+name: mock-wiz-issues
+entity: alert
+mock: true
+source:
+  type: http
+  base_url: http://localhost:9000/wiz
+  allow_hosts: [localhost]
+auth:
+  type: oauth2_client_credentials
+  token_url: http://localhost:9000/wiz/oauth/token
+  client_id_secret: mock_wiz_client_id
+  client_secret_secret: mock_wiz_client_secret
+  audience: wiz-api
+request:
+  method: POST
+  read_only_post: true
+  path: /graphql
+  format: json
+  records_path: data.issues.nodes
+  error_path: errors
+  body:
+    query: "query Issues($first: Int, $after: String) { issues(first: $first, after: $after) { nodes { id severity status createdAt sourceRule { name } entitySnapshot { name } } pageInfo { hasNextPage endCursor } } }"
+    variables: { first: 50, after: null }
+pagination:
+  type: body_token
+  token_path: data.issues.pageInfo.endCursor
+  token_param: variables.after
+  token_in: body
+  has_more_path: data.issues.pageInfo.hasNextPage
+schedule: every 15m
+retry: { delays_s: [1, 2, 4], jitter: false }
+rate_limit: { max_rps: 2, remaining_header: X-Rate-Limit-Remaining, reset_header: X-Rate-Limit-Reset }
+limits: { max_pages: 50, timeout_s: 5, max_response_mb: 20 }
+map:
+  id: id
+  type: sourceRule.name
+  severity: { path: severity, transform: lower }
+  timestamp: { path: createdAt, transform: to_utc }
+  description: entitySnapshot.name
+notify: { slack_after_failures: 3 }

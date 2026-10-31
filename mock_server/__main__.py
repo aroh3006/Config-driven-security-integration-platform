@@ -7,7 +7,7 @@ from pathlib import Path
 import uvicorn
 
 from mock_server import app as mock_app
-from mock_server import saas
+from mock_server import saas, styles
 
 ENV_BLOCK = f"""\
 MOCK_FIREWALL_KEY={mock_app.FIREWALL_KEY}
@@ -18,6 +18,12 @@ MOCK_OKTA_KEY={saas.OKTA_KEY}
 MOCK_GITHUB_TOKEN={saas.GITHUB_TOKEN}
 MOCK_JIRA_EMAIL={saas.JIRA_EMAIL}
 MOCK_JIRA_TOKEN={saas.JIRA_TOKEN}
+MOCK_FMC_USER={styles.FMC_USER}
+MOCK_FMC_PASSWORD={styles.FMC_PASSWORD}
+MOCK_WIZ_CLIENT_ID={styles.WIZ_CLIENT_ID}
+MOCK_WIZ_CLIENT_SECRET={styles.WIZ_CLIENT_SECRET}
+MOCK_CORTEX_KEY={styles.CORTEX_KEY}
+MOCK_CORTEX_KEY_ID={styles.CORTEX_KEY_ID}
 """
 
 CREDENTIALS = f"""\

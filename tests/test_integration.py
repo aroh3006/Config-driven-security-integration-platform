@@ -11,7 +11,7 @@ from app import connectors, engine_client, health
 from app.api import create_app
 from engine import faults
 from mock_server import app as mock_app
-from mock_server import saas
+from mock_server import saas, styles
 from store import db
 
 REPO_CONFIGS = Path(__file__).resolve().parent.parent / "configs"
@@ -24,6 +24,12 @@ MOCK_SECRETS = {
     "MOCK_GITHUB_TOKEN": saas.GITHUB_TOKEN,
     "MOCK_JIRA_EMAIL": saas.JIRA_EMAIL,
     "MOCK_JIRA_TOKEN": saas.JIRA_TOKEN,
+    "MOCK_FMC_USER": styles.FMC_USER,
+    "MOCK_FMC_PASSWORD": styles.FMC_PASSWORD,
+    "MOCK_WIZ_CLIENT_ID": styles.WIZ_CLIENT_ID,
+    "MOCK_WIZ_CLIENT_SECRET": styles.WIZ_CLIENT_SECRET,
+    "MOCK_CORTEX_KEY": styles.CORTEX_KEY,
+    "MOCK_CORTEX_KEY_ID": styles.CORTEX_KEY_ID,
 }
 
 
@@ -77,6 +83,9 @@ def test_every_repo_config_passes_the_real_validator(path):
         ("mock-edr-hosts", "device", 200),
         ("mock-edr-detections", "alert", 300),
         ("mock-cloud-audit", "alert", 300),
+        ("mock-cisco-fmc-devices", "device", 60),
+        ("mock-wiz-issues", "alert", 120),
+        ("mock-cortex-alerts", "alert", 250),
     ],
 )
 def test_mock_sources_run_end_to_end(run, name, entity, total):
@@ -185,6 +194,32 @@ def test_wrong_jira_key_is_auth_failed_not_an_empty_success(run, monkeypatch):
     assert (result.status, result.records_pulled) == ("auth_failed", 0)
     assert "credentials rejected" in result.last_error
     assert "wrong-key-value" not in result.last_error
+
+
+def test_session_login_wrong_password_is_auth_failed(run, monkeypatch):
+    monkeypatch.setenv("MOCK_FMC_PASSWORD", "wrong-password-value")
+    result = run("mock-cisco-fmc-devices")
+    assert (result.status, result.records_pulled) == ("auth_failed", 0)
+    assert "wrong-password-value" not in result.last_error
+
+
+def test_expired_session_logs_in_again_without_failing(run, mock_transport):
+    first = run("mock-cisco-fmc-devices")
+    with httpx.Client(transport=mock_transport, base_url="http://localhost:9000") as admin:
+        assert admin.post("/admin/expire-tokens").json()["expired"] >= 1
+    second = run("mock-cisco-fmc-devices")
+    assert (first.records_pulled, second.records_pulled) == (60, 60)
+    assert second.status == "partial"
+
+
+def test_wrong_second_header_is_auth_failed(run, monkeypatch):
+    monkeypatch.setenv("MOCK_CORTEX_KEY_ID", "99")
+    assert run("mock-cortex-alerts").status == "auth_failed"
+
+
+def test_graphql_mock_pages_through_nested_cursor(run):
+    result = run("mock-wiz-issues")
+    assert (result.records_pulled, result.pages) == (120, 3)
 
 
 def test_wrong_key_gives_auth_failed(run, monkeypatch):

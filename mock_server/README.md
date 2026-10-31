@@ -13,6 +13,9 @@ Fake security tools for testing and the demo. Run it with `python -m mock_server
 | EDR hosts | `GET /edr/devices/combined/devices/v1` | OAuth2 client credentials | `after` cursor at `meta.pagination.next` | Common EDR API shape |
 | EDR detections | `GET /edr/alerts/combined/alerts/v1` | OAuth2 client credentials | Same | Common EDR API shape |
 | Cloud audit | `POST /cloud/` | `X-Api-Key` header | `NextToken` in the body | CloudTrail LookupEvents |
+| Cisco FMC devices | `GET /fmc/api/fmc_config/v1/domain/{domain}/devices/devicerecords` | Session login, token in a response header | `offset`, `limit`, `paging.count` | Cisco FMC REST API |
+| Wiz issues | `POST /wiz/graphql` | OAuth2 with an audience | Cursor inside `variables`, `hasNextPage` | Wiz GraphQL API |
+| Cortex alerts | `POST /cortex/public_api/v1/alerts/get_alerts` | API key plus `x-xdr-auth-id` | `search_from` and `search_to` inside `request_data` | Cortex XSIAM API |
 
 Token endpoint: `POST /edr/oauth2/token`. It takes the client in the form body or a Basic header. It returns 201 with `Cache-Control: no-store`. Tokens last 5 minutes.
 
@@ -50,6 +53,9 @@ Other values follow the standard ranges. External IPs are in 192.0.2.0/24, 198.5
 - **Okta and GitHub 429:** both mocks send `Retry-After`. Real Okta signals the wait with `X-Rate-Limit-Reset`.
 - **AWS status codes:** real CloudTrail answers bad credentials and throttling with HTTP 400. The mock uses 401 and 429 so the failure tests behave the same on every source.
 - **Commands in EDR detections:** process names and command lines are illustrative.
+- **Cisco FMC:** login, the 204 response, token headers and the 25 and 1000 page limits follow Cisco's docs. The device fields are from memory of the API.
+- **Wiz:** the `audience`, `first`, `endCursor` and `hasNextPage` behaviour follows Wiz's guide. Node fields, rule names and the fixed token lifetime are illustrative. The mock checks that the query names `issues` and does not parse GraphQL.
+- **Cortex:** `reply.total_count`, `reply.result_count`, `reply.alerts`, the two auth headers and the page cap of 100 follow published sources. Alert fields other than `alert_id` and `severity` are illustrative.
 - **Jira priority:** every mock issue has one. The team-managed projects on our live site return `priority: null`.
 - **GitHub 429:** real GitHub can also signal rate limits with a 403. The mock always uses 429.
 - **Links in data:** URLs inside records point at example.com, not the mock server.
@@ -79,6 +85,9 @@ The random seed is fixed. Timestamps fall in the 7 days before the server starte
 | Firewall | 300 |
 | EDR hosts and detections | 200 and 300 |
 | Cloud audit | 300 |
+| Cisco FMC devices | 60 |
+| Wiz issues | 120 |
+| Cortex alerts | 250 |
 
 ## Fault control
 
